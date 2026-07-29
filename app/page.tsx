@@ -1,6 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { learnLanguages, pythonTopics, type PythonTopic } from "@/lib/learn-content";
+
+const CodeEditor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => <div className="learn-editor-loading">Preparing editor…</div>,
+});
 
 type View = "dashboard" | "learn" | "practice" | "challenges" | "leaderboard";
 
@@ -108,13 +116,177 @@ function HomeView({ onNavigate, xp, onPractice }: { onNavigate: (view: View) => 
   );
 }
 
-function LearnView() {
-  const topics = ["Getting started", "Variables & data types", "Control flow", "Functions & scope", "Lists & dictionaries", "Object-oriented Python"];
-  return <section className="workspace-view">
-    <div className="view-hero"><div><span className="eyebrow">PYTHON PATH · 34% COMPLETE</span><h1>Learn by building.</h1><p>Clear explanations, runnable examples, and quick checks—one useful concept at a time.</p></div><div className="path-orbit"><span>⌘</span><i>03</i></div></div>
-    <div className="learn-layout">
-      <div className="topic-list card"><div className="topic-list__head"><b>Python foundations</b><span>8 / 24</span></div>{topics.map((topic, index) => <button key={topic} className={index === 3 ? "topic topic--active" : "topic"}><i>{index < 3 ? "✓" : `${index + 1}`}</i><span>{topic}</span>{index === 3 && <em>Resume</em>}</button>)}</div>
-      <article className="lesson-panel card"><span className="eyebrow">MODULE 3 · LESSON 4</span><h2>Functions &amp; scope</h2><p className="lesson-lede">Functions let you turn a repeatable piece of work into a named tool. Scope decides which values that tool can see.</p><div className="snippet"><div><span>1</span><code><b>def</b> greet(name):</code></div><div><span>2</span><code>&nbsp;&nbsp;<b>return</b> <mark>f</mark>&quot;Hello, {"{name}"}!&quot;</code></div><div><span>3</span><code>&nbsp;</code></div><div><span>4</span><code>message = greet(<mark>&quot;Alex&quot;</mark>)</code></div></div><div className="lesson-tip"><span>✦</span><p><b>Think of scope as a room.</b> A variable created inside a function stays in that function&apos;s room unless you return it.</p></div><div className="lesson-controls"><button className="button button--ghost">← Previous</button><button className="button button--primary">Continue lesson →</button></div></article>
+type LearnStage = "languages" | "roadmap" | "lesson";
+type ConsoleState = { kind: "idle" | "running" | "success" | "error"; stdout: string; stderr: string; label: string };
+
+function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initialStage?: LearnStage; initialTopicId?: number }) {
+  const router = useRouter();
+  const [stage, setStage] = useState<LearnStage>(initialStage);
+  const [completedIds, setCompletedIds] = useState<number[]>([]);
+  const [selectedTopicId, setSelectedTopicId] = useState(initialTopicId);
+  const [code, setCode] = useState((pythonTopics.find((topic) => topic.id === initialTopicId) ?? pythonTopics[0]).starterCode);
+  const [consoleState, setConsoleState] = useState<ConsoleState>({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
+  const [checkState, setCheckState] = useState<{ passed?: boolean; actual?: string; expected?: string; message?: string }>({});
+  const [serverProgressReady, setServerProgressReady] = useState(false);
+
+  const selectedTopic = pythonTopics.find((topic) => topic.id === selectedTopicId) ?? pythonTopics[0];
+  const completedCount = completedIds.length;
+  const progressPercent = Math.round((completedCount / pythonTopics.length) * 100);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("codequest-python-preview-progress");
+    if (saved) {
+      try {
+        const savedProgress = JSON.parse(saved) as number[];
+        queueMicrotask(() => setCompletedIds(savedProgress));
+      } catch {
+        window.localStorage.removeItem("codequest-python-preview-progress");
+      }
+    }
+
+    fetch("/api/learn/python/topics")
+      .then(async (response) => response.ok ? response.json() : Promise.reject())
+      .then((topics: { id: number; status: string }[]) => {
+        setCompletedIds(topics.filter((topic) => topic.status === "completed").map((topic) => topic.id));
+        setServerProgressReady(true);
+      })
+      .catch(() => setServerProgressReady(false));
+  }, []);
+
+  const statusFor = (topic: PythonTopic) => {
+    if (completedIds.includes(topic.id)) return "completed" as const;
+    if (topic.position === 1 || completedIds.includes(topic.id - 1)) return "unlocked" as const;
+    return "locked" as const;
+  };
+
+  const openTopic = (topic: PythonTopic) => {
+    if (statusFor(topic) === "locked") return;
+    setSelectedTopicId(topic.id);
+    setCode(topic.starterCode);
+    setConsoleState({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
+    setCheckState({});
+    setStage("lesson");
+  };
+
+  const runCode = async () => {
+    setConsoleState({ kind: "running", stdout: "", stderr: "", label: "Running in the sandbox…" });
+    try {
+      const response = await fetch("/api/learn/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ language: "python", code }),
+      });
+      const result = await response.json() as { stdout?: string; stderr?: string; exitCode?: number; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Unable to run that code.");
+      setConsoleState({
+        kind: result.exitCode === 0 ? "success" : "error",
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+        label: result.exitCode === 0 ? "Finished" : "Finished with an error",
+      });
+    } catch (error) {
+      setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Sandbox unavailable" });
+    }
+  };
+
+  const checkTask = async () => {
+    setCheckState({ message: "Checking your solution in the sandbox…" });
+    try {
+      const response = await fetch(`/api/learn/python/topics/${selectedTopic.id}/check`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const result = await response.json() as { passed?: boolean; actualOutput?: string; expectedOutput?: string; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Unable to check that code.");
+
+      setCheckState({ passed: result.passed, actual: result.actualOutput, expected: result.expectedOutput });
+      if (result.passed) {
+        const nextCompleted = [...new Set([...completedIds, selectedTopic.id])];
+        setCompletedIds(nextCompleted);
+        window.localStorage.setItem("codequest-python-preview-progress", JSON.stringify(nextCompleted));
+      }
+    } catch (error) {
+      setCheckState({ message: error instanceof Error ? error.message : "Unable to check that code." });
+    }
+  };
+
+  const nextTopic = pythonTopics.find((topic) => topic.position === selectedTopic.position + 1);
+  const canMoveNext = completedIds.includes(selectedTopic.id) && nextTopic;
+
+  if (stage === "languages") {
+    return <section className="learn-hub workspace-view">
+      <div className="learn-hub__hero">
+        <div><span className="eyebrow">CODEQUEST LEARN</span><h1>Choose your path.</h1><p>Learn one clear concept at a time, write real code, and make steady progress.</p></div>
+        <div className="learn-hub__spark" aria-hidden="true">&lt;/&gt;</div>
+      </div>
+      <div className="language-picker" aria-label="Choose a programming language">
+        {learnLanguages.map((language) => language.active ? (
+          <button className="language-picker__card language-picker__card--active" key={language.id} onClick={() => router.push("/learn/python")}>
+            <span className="language-picker__mark" style={{ color: language.accent }}>{language.icon}</span>
+            <span><b>{language.name}</b><small>Python foundations · 10 topics</small></span>
+            <em>Start path →</em>
+          </button>
+        ) : (
+          <div className="language-picker__card language-picker__card--disabled" key={language.id} aria-disabled="true" title={`${language.name} is coming soon`}>
+            <span className="language-picker__mark" style={{ color: language.accent }}>{language.icon}</span>
+            <span><b>{language.name}</b><small>New learning path</small></span>
+            <em>Coming soon</em>
+          </div>
+        ))}
+      </div>
+    </section>;
+  }
+
+  if (stage === "roadmap") {
+    return <section className="learn-hub workspace-view">
+      <div className="learn-hub__hero learn-hub__hero--roadmap">
+        <div><button className="learn-back" onClick={() => setStage("languages")}>← All languages</button><span className="eyebrow">PYTHON · FOUNDATIONS</span><h1>Your Python roadmap.</h1><p>Finish each checkpoint to unlock the next one. No skipping—just momentum.</p></div>
+        <div className="roadmap-score"><b>{completedCount}</b><span>/ {pythonTopics.length} complete</span><i><span style={{ width: `${progressPercent}%` }} /></i></div>
+      </div>
+      <div className="roadmap" aria-label="Python learning roadmap">
+        {pythonTopics.map((topic) => {
+          const status = statusFor(topic);
+          return <div className={`roadmap__item roadmap__item--${status}`} key={topic.id}>
+            <div className="roadmap__line" aria-hidden="true" />
+            <button disabled={status === "locked"} onClick={() => openTopic(topic)} title={status === "locked" ? "Complete the previous topic to unlock this lesson." : `Open ${topic.title}`}>
+              <span className="roadmap__number">{status === "completed" ? "✓" : status === "locked" ? "🔒" : topic.position}</span>
+              <span className="roadmap__copy"><b>{topic.title}</b><small>{topic.description}</small></span>
+              <em>{status === "completed" ? "Complete" : status === "locked" ? "Locked" : "Start lesson →"}</em>
+            </button>
+          </div>;
+        })}
+      </div>
+    </section>;
+  }
+
+  return <section className="learn-hub workspace-view">
+    <div className="lesson-topbar">
+      <button className="learn-back" onClick={() => setStage("roadmap")}>← Python roadmap</button>
+      <span className="lesson-topbar__progress">Topic {selectedTopic.position} of {pythonTopics.length} · {progressPercent}% complete</span>
+    </div>
+    <div className="lesson-heading"><div><span className="eyebrow">PYTHON FOUNDATIONS · TOPIC {selectedTopic.position}</span><h1>{selectedTopic.title}</h1><p>{selectedTopic.description}</p></div><button className="lesson-help" type="button" title="AI hints will be added in a future update." onClick={() => setCheckState({ message: "Need help? The hint guide is coming soon. Re-read the example, then try one small change." })}>Need help?</button></div>
+    <div className="lesson-workspace">
+      <article className="lesson-explanation card">
+        <span className="lesson-panel-label">01 · Understand it</span>
+        {selectedTopic.explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+        <div className="lesson-example"><div><b>Example</b><span>Read only</span></div><CodeEditor height="142px" defaultLanguage="python" language="python" value={selectedTopic.exampleCode} theme="vs-dark" options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, lineNumbers: "on", scrollBeyondLastLine: false, folding: false, padding: { top: 12, bottom: 12 } }} /></div>
+      </article>
+      <article className="lesson-code card">
+        <div className="lesson-code__head"><span className="lesson-panel-label">02 · Try it</span><span>main.py</span></div>
+        <CodeEditor height="300px" defaultLanguage="python" language="python" value={code} onChange={(value) => setCode(value ?? "")} theme="vs-dark" options={{ minimap: { enabled: false }, fontSize: 14, lineNumbers: "on", scrollBeyondLastLine: false, padding: { top: 14, bottom: 14 }, automaticLayout: true }} />
+        <div className="lesson-runbar"><button className="lesson-run" onClick={runCode} disabled={consoleState.kind === "running"}>{consoleState.kind === "running" ? "Running…" : "▷ Run code"}</button><span>Executes in a remote sandbox</span></div>
+        <div className={`lesson-console lesson-console--${consoleState.kind}`} role="status" aria-live="polite"><div><b>Output</b><span>{consoleState.label}</span></div>{consoleState.stdout && <pre>{consoleState.stdout}</pre>}{consoleState.stderr && <pre className="lesson-console__error">{consoleState.stderr}</pre>}{!consoleState.stdout && !consoleState.stderr && <pre className="lesson-console__empty">{consoleState.label}</pre>}</div>
+      </article>
+      <aside className="lesson-task card">
+        <span className="lesson-panel-label">03 · Practice task</span>
+        <div className="lesson-task__badge">{selectedTopic.position.toString().padStart(2, "0")}</div><h2>{selectedTopic.taskTitle}</h2><p>{selectedTopic.taskDescription}</p>
+        {selectedTopic.taskInput && <div className="lesson-input-note"><b>Checker input</b><code>Ada</code></div>}
+        <button className="lesson-check" onClick={checkTask}>Check solution</button>
+        {checkState.message && <p className="lesson-check-message">{checkState.message}</p>}
+        {checkState.passed !== undefined && <div className={checkState.passed ? "lesson-result lesson-result--pass" : "lesson-result lesson-result--fail"}><b>{checkState.passed ? "Nice work — topic complete!" : "Not quite yet"}</b>{!checkState.passed && <><span>Expected</span><code>{checkState.expected}</code><span>Your output</span><code>{checkState.actual || "(no output)"}</code></>}</div>}
+        <div className="lesson-next"><button disabled={!canMoveNext} onClick={() => nextTopic && openTopic(nextTopic)}>{nextTopic ? "Next topic →" : "Python foundations complete"}</button>{!completedIds.includes(selectedTopic.id) && <small>{serverProgressReady ? "Pass the task to unlock the next topic." : "Sign in and configure the sandbox to save progress."}</small>}</div>
+      </aside>
     </div>
   </section>;
 }
@@ -145,8 +317,8 @@ function LeaderboardView() {
   return <section className="workspace-view leaderboard-view"><div className="view-hero"><div><span className="eyebrow">WEEKLY LEADERBOARD</span><h1>Keep climbing.</h1><p>You&apos;re in the top 18% of learners this week. A single challenge could move you up.</p></div><div className="rank-medal">#3</div></div><div className="leaderboard-grid"><article className="leaderboard-card card"><div className="leaderboard-card__top"><div><h2>Python pathfinders</h2><p>July 15 – July 21</p></div><button className="button button--ghost">This week⌄</button></div>{people.map(([name, score, initials, color], index) => <div className={name === "Alex Morgan" ? "leader-row leader-row--you" : "leader-row"} key={name}><span className="rank">{index + 1}</span><span className={`avatar avatar--${color}`}>{initials}</span><b>{name}{name === "Alex Morgan" && <small> You</small>}</b><span className="leader-xp">✦ {score} XP</span></div>)}</article><aside className="card leaderboard-side"><span className="eyebrow">YOUR WEEK</span><div className="week-score"><b>1,560</b><span>XP earned</span></div><div className="bar-chart">{[25, 58, 35, 72, 49, 88, 42].map((height, index) => <div key={height + index}><i style={{ height: `${height}%` }} /><span>{["M", "T", "W", "T", "F", "S", "S"][index]}</span></div>)}</div><hr /><p><b>440 XP</b> will put you in first place.</p><button className="button button--primary">Find a challenge →</button></aside></div></section>;
 }
 
-export default function Home() {
-  const [view, setView] = useState<View>("dashboard");
+export default function Home({ initialView = "dashboard", initialLearnStage = "languages", initialTopicId = 1 }: { initialView?: View; initialLearnStage?: LearnStage; initialTopicId?: number }) {
+  const [view, setView] = useState<View>(initialView);
   const [notice, setNotice] = useState("");
   const [xp, setXp] = useState(1560);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -163,7 +335,7 @@ export default function Home() {
     </aside>
     <section className="main-area">
       <header className="topbar"><div className="mobile-brand"><span>⌘</span> codequest</div><div className="topbar-spacer" /><button className="top-stat top-stat--flame" onClick={goPractice}><span>♨</span><b>5</b></button><button className="top-stat top-stat--xp" onClick={() => setView("leaderboard")}><span>✦</span><b>{xp.toLocaleString()} XP</b></button><div className="profile-wrap"><button className="profile-button" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen}><span className="avatar avatar--gold">AM</span><span className="profile-name">Alex Morgan</span><i>⌄</i></button>{profileOpen && <div className="profile-menu"><b>Alex Morgan</b><span>Level 11 · Code Pathfinder</span><button onClick={() => { setView("leaderboard"); setProfileOpen(false); }}>View profile</button></div>}</div></header>
-      <div className="page-content">{view === "dashboard" && <HomeView onNavigate={setView} xp={xp} onPractice={goPractice} />}{view === "learn" && <LearnView />}{view === "practice" && <PracticeView onComplete={() => awardXp(8, "Correct! +8 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={() => awardXp(50, "Solution submitted! Your first test run is queued. +50 XP awarded.")} />}{view === "leaderboard" && <LeaderboardView />}</div>
+      <div className="page-content">{view === "dashboard" && <HomeView onNavigate={setView} xp={xp} onPractice={goPractice} />}{view === "learn" && <LearnView initialStage={initialLearnStage} initialTopicId={initialTopicId} />}{view === "practice" && <PracticeView onComplete={() => awardXp(8, "Correct! +8 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={() => awardXp(50, "Solution submitted! Your first test run is queued. +50 XP awarded.")} />}{view === "leaderboard" && <LeaderboardView />}</div>
     </section>
     <nav aria-label="Mobile navigation" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border border-white/10 bg-quest-surface/95 p-1 shadow-2xl shadow-black/40 backdrop-blur">
       {navItems.map((item) => <button key={item.id} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition ${view === item.id ? "bg-quest-purple/20 text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}><span className="text-base leading-none">{item.icon}</span><span className="truncate">{item.label}</span></button>)}
