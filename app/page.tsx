@@ -223,7 +223,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
       </div>
       <div className="language-picker" aria-label="Choose a programming language">
         {learnLanguages.map((language) => language.active ? (
-          <button className="language-picker__card language-picker__card--active" key={language.id} onClick={() => router.push("/learn/python")}>
+          <button className="language-picker__card language-picker__card--active" key={language.id} onClick={() => { setStage("roadmap"); router.push("/learn/python"); }}>
             <span className="language-picker__mark" style={{ color: language.accent }}>{language.icon}</span>
             <span><b>{language.name}</b><small>Python foundations · 10 topics</small></span>
             <em>Start path →</em>
@@ -242,7 +242,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   if (stage === "roadmap") {
     return <section className="learn-hub workspace-view">
       <div className="learn-hub__hero learn-hub__hero--roadmap">
-        <div><button className="learn-back" onClick={() => setStage("languages")}>← All languages</button><span className="eyebrow">PYTHON · FOUNDATIONS</span><h1>Your Python roadmap.</h1><p>Finish each checkpoint to unlock the next one. No skipping—just momentum.</p></div>
+        <div><button className="learn-back" onClick={() => { setStage("languages"); router.push("/learn"); }}>← All languages</button><span className="eyebrow">PYTHON · FOUNDATIONS</span><h1>Your Python roadmap.</h1><p>Finish each checkpoint to unlock the next one. No skipping—just momentum.</p></div>
         <div className="roadmap-score"><b>{completedCount}</b><span>/ {pythonTopics.length} complete</span><i><span style={{ width: `${progressPercent}%` }} /></i></div>
       </div>
       <div className="roadmap" aria-label="Python learning roadmap">

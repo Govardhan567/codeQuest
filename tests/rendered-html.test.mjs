@@ -50,6 +50,8 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(page, /expectedOutput/);
   assert.match(page, /aria-label="Challenge workspace"/);
   assert.match(page, /onFindChallenge/);
+  assert.match(page, /setStage\("roadmap"\); router\.push\("\/learn\/python"\)/);
+  assert.match(page, /setStage\("languages"\); router\.push\("\/learn"\)/);
   assert.match(css, /\.dialog-backdrop/);
   assert.match(css, /\.challenge-editor/);
   assert.match(css, /\.setting-switch/);
