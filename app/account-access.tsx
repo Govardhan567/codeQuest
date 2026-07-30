@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { createClient } from "@/lib/client";
+import { createClient, hasSupabaseAuth } from "@/lib/client";
 
 export type CodeQuestAccount = {
   displayName: string;
@@ -21,10 +21,6 @@ const demoAccount: CodeQuestAccount = {
   email: "demo@codequest.local",
   kind: "demo",
 };
-
-const hasSupabaseAuth = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-);
 
 function initials(name: string) {
   return name

@@ -69,4 +69,5 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(accountAccess, /Try Demo access/);
   assert.match(accountAccess, /Continue with ChatGPT/);
   assert.match(css, /\.auth-dialog/);
+  assert.match(accountAccess, /hasSupabaseAuth/);
 });
