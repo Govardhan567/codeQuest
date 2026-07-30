@@ -68,6 +68,7 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(accountAccess, /signUp/);
   assert.match(accountAccess, /signInWithPassword/);
   assert.match(accountAccess, /Email confirmation took too long/);
+  assert.match(accountAccess, /Verify your Resend sender domain/);
   assert.match(accountAccess, /Try Demo access/);
   assert.match(accountAccess, /Continue with ChatGPT/);
   assert.match(css, /\.auth-dialog/);

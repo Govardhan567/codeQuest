@@ -39,6 +39,9 @@ function messageFrom(error: unknown) {
   if (message.toLowerCase().includes("abort") || message.toLowerCase().includes("failed to fetch")) {
     return "Email confirmation could not be sent. Check your SMTP settings, then try again.";
   }
+  if (message === "{}") {
+    return "Email confirmation could not be sent. Verify your Resend sender domain and SMTP details, then try again.";
+  }
   return message || "Something went wrong. Please try again.";
 }
 
