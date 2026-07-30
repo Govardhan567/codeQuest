@@ -37,9 +37,10 @@ test("server-renders the Python roadmap route", async () => {
 });
 
 test("implements usable help, settings, and challenge controls", async () => {
-  const [page, css] = await Promise.all([
+  const [page, css, layout] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /setPanel\("help"\)/);
@@ -55,4 +56,6 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(css, /\.dialog-backdrop/);
   assert.match(css, /\.challenge-editor/);
   assert.match(css, /\.setting-switch/);
+  assert.match(layout, /export const metadata/);
+  assert.doesNotMatch(layout, /next\/headers/);
 });
