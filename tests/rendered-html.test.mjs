@@ -53,6 +53,10 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(page, /onFindChallenge/);
   assert.match(page, /setStage\("roadmap"\); router\.push\("\/learn\/python"\)/);
   assert.match(page, /setStage\("languages"\); router\.push\("\/learn"\)/);
+  assert.match(page, /const practiceQuestions = \[/);
+  assert.match(page, /Next question →/);
+  assert.match(page, /setQuestionIndex\(\(current\) => current \+ 1\)/);
+  assert.match(page, /Quest complete! \+40 XP/);
   assert.match(css, /\.dialog-backdrop/);
   assert.match(css, /\.challenge-editor/);
   assert.match(css, /\.setting-switch/);

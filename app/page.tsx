@@ -292,22 +292,47 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   </section>;
 }
 
+const practiceQuestions = [
+  { prompt: "What does this expression return?", code: "len([1, 2, 3])", answer: "3", explanation: "Exactly. len() counts the items in a collection.", next: "Calculate a power with the exponent operator." },
+  { prompt: "What does this expression return?", code: "2 ** 3", answer: "8", explanation: "Correct. ** raises a number to a power.", next: "Count the characters in a string." },
+  { prompt: "What does this expression return?", code: "len(\"code\")", answer: "4", explanation: "Right. The word code has four characters.", next: "Use floor division to find a whole-number result." },
+  { prompt: "What does this expression return?", code: "10 // 3", answer: "3", explanation: "Nice. // performs floor division and removes the remainder.", next: "Check the truthiness of an empty list." },
+  { prompt: "What does this expression return?", code: "bool([])", answer: "false", explanation: "Perfect. An empty list is falsy in Python.", next: "Finish the quest and collect your XP." },
+];
+
 function PracticeView({ onComplete }: { onComplete: () => void }) {
+  const [questionIndex, setQuestionIndex] = useState(0);
   const [answer, setAnswer] = useState("");
   const [checked, setChecked] = useState(false);
-  const [completed, setCompleted] = useState(false);
-  const checkAnswer = () => {
-    const isCorrect = answer.trim() === "3";
-    setChecked(true);
-    if (isCorrect && !completed) {
-      setCompleted(true);
-      onComplete();
+  const [completedCount, setCompletedCount] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const question = practiceQuestions[questionIndex];
+  const isCorrect = answer.trim().toLocaleLowerCase() === question.answer;
+
+  const checkOrAdvance = () => {
+    if (checked && isCorrect) {
+      if (questionIndex === practiceQuestions.length - 1) {
+        setFinished(true);
+        onComplete();
+        return;
+      }
+      setQuestionIndex((current) => current + 1);
+      setAnswer("");
+      setChecked(false);
+      return;
     }
+
+    setChecked(true);
+    if (isCorrect) setCompletedCount(questionIndex + 1);
   };
+
+  const actionLabel = checked && isCorrect
+    ? questionIndex === practiceQuestions.length - 1 ? "Finish quest →" : "Next question →"
+    : "Check answer";
 
   return <section className="workspace-view practice-view">
     <div className="view-hero"><div><span className="eyebrow">TODAY&apos;S QUEST · 5 MINUTES</span><h1>Warm up your Python brain.</h1><p>Answer five short prompts. Incorrect answers cost a heart, but you can always try again.</p></div><div className="hearts"><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span></div></div>
-    <div className="practice-grid"><article className="question-card card"><div className="question-card__top"><span>QUESTION 1 OF 5</span><span>+8 XP</span></div><div className="question-orb">01</div><h2>What does this expression return?</h2><div className="inline-code"><code>len([1, 2, 3])</code></div><form className="answer-row" onSubmit={(event) => { event.preventDefault(); checkAnswer(); }}><input aria-label="Your answer" value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} placeholder="Type your answer" disabled={completed} /><button className="button button--primary" type="submit" disabled={completed}>{completed ? "Completed" : "Check answer"}</button></form>{checked && <p className={answer.trim() === "3" ? "answer-feedback answer-feedback--good" : "answer-feedback"}>{answer.trim() === "3" ? "Exactly. len() counts the items in a collection. +8 XP added!" : "Not quite. Count the items in the square brackets, then try again."}</p>}</article><aside className="practice-side card"><span className="eyebrow">QUEST PROGRESS</span><div className="quest-numbers"><b>{completed ? 1 : 0}</b><span>/ 5 complete</span></div><div className="quest-dots"><i className="active" /><i className={completed ? "active" : undefined} /><i /><i /><i /></div><hr /><span className="eyebrow">UP NEXT</span><p>{completed ? "Spot the bug in a short function." : "Answer this question to begin your streak."}</p><div className="tip-small"><span>✦</span><p>Need a nudge? Your tutor is ready with hints—not answers.</p></div></aside></div>
+    <div className="practice-grid">{finished ? <article className="question-card card practice-complete"><div className="question-orb">✓</div><span className="eyebrow">QUEST COMPLETE</span><h2>Five steps stronger.</h2><p>You completed today&apos;s Python warm-up and earned 40 XP. Come back tomorrow for a fresh quest.</p><div className="practice-complete__score"><b>5 / 5</b><span>answers correct</span></div></article> : <article className="question-card card"><div className="question-card__top"><span>QUESTION {questionIndex + 1} OF {practiceQuestions.length}</span><span>+8 XP</span></div><div className="question-orb">{(questionIndex + 1).toString().padStart(2, "0")}</div><h2>{question.prompt}</h2><div className="inline-code"><code>{question.code}</code></div><form className="answer-row" onSubmit={(event) => { event.preventDefault(); checkOrAdvance(); }}><input aria-label="Your answer" value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} placeholder="Type your answer" disabled={checked && isCorrect} /><button className="button button--primary" type="submit">{actionLabel}</button></form>{checked && <p className={isCorrect ? "answer-feedback answer-feedback--good" : "answer-feedback"}>{isCorrect ? `${question.explanation} +8 XP ready.` : "Not quite. Check the expression carefully, then try again."}</p>}</article>}<aside className="practice-side card"><span className="eyebrow">QUEST PROGRESS</span><div className="quest-numbers"><b>{completedCount}</b><span>/ {practiceQuestions.length} complete</span></div><div className="quest-dots">{practiceQuestions.map((_, index) => <i key={index} className={index < completedCount ? "active" : index === questionIndex && !finished ? "current" : undefined} />)}</div><hr /><span className="eyebrow">UP NEXT</span><p>{finished ? "A new Python quest will be ready tomorrow." : question.next}</p><div className="tip-small"><span>✦</span><p>Need a nudge? Your tutor is ready with hints—not answers.</p></div></aside></div>
   </section>;
 }
 
@@ -421,7 +446,7 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
     </aside>
     <section className="main-area">
       <header className="topbar"><div className="mobile-brand"><span>⌘</span> codequest</div><div className="topbar-spacer" /><button className="top-stat top-stat--flame" onClick={goPractice}><span>♨</span><b>5</b></button><button className="top-stat top-stat--xp" onClick={() => setView("leaderboard")}><span>✦</span><b>{xp.toLocaleString()} XP</b></button><div className="profile-wrap"><button className="profile-button" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen}><span className="avatar avatar--gold">AM</span><span className="profile-name">Alex Morgan</span><i>⌄</i></button>{profileOpen && <div className="profile-menu"><b>Alex Morgan</b><span>Level 11 · Code Pathfinder</span><button onClick={() => { setView("leaderboard"); setProfileOpen(false); }}>View profile</button></div>}</div></header>
-      <div className="page-content">{view === "dashboard" && <HomeView onNavigate={navigate} xp={xp} onPractice={openPractice} onOpenQuest={() => setPanel("quest")} />}{view === "learn" && <LearnView initialStage={initialLearnStage} initialTopicId={initialTopicId} />}{view === "practice" && <PracticeView onComplete={() => awardXp(8, "Correct! +8 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={(amount, title) => awardXp(amount, `${title} submitted! +${amount} XP added to your quest.`)} />}{view === "leaderboard" && <LeaderboardView onFindChallenge={() => navigate("challenges")} />}</div>
+      <div className="page-content">{view === "dashboard" && <HomeView onNavigate={navigate} xp={xp} onPractice={openPractice} onOpenQuest={() => setPanel("quest")} />}{view === "learn" && <LearnView initialStage={initialLearnStage} initialTopicId={initialTopicId} />}{view === "practice" && <PracticeView onComplete={() => awardXp(40, "Quest complete! +40 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={(amount, title) => awardXp(amount, `${title} submitted! +${amount} XP added to your quest.`)} />}{view === "leaderboard" && <LeaderboardView onFindChallenge={() => navigate("challenges")} />}</div>
     </section>
     <nav aria-label="Mobile navigation" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border border-white/10 bg-quest-surface/95 p-1 shadow-2xl shadow-black/40 backdrop-blur">
       {navItems.map((item) => <button key={item.id} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition ${view === item.id ? "bg-quest-purple/20 text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}><span className="text-base leading-none">{item.icon}</span><span className="truncate">{item.label}</span></button>)}
