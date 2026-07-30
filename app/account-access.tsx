@@ -32,7 +32,14 @@ function initials(name: string) {
 }
 
 function messageFrom(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  const message = error instanceof Error ? error.message : "";
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "Email confirmation took too long. Check your SMTP settings, then try again.";
+  }
+  if (message.toLowerCase().includes("abort") || message.toLowerCase().includes("failed to fetch")) {
+    return "Email confirmation could not be sent. Check your SMTP settings, then try again.";
+  }
+  return message || "Something went wrong. Please try again.";
 }
 
 export function AccountAccess({ account, onAccountChange, onViewProfile }: AccountAccessProps) {

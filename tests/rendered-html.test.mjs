@@ -37,11 +37,12 @@ test("server-renders the Python roadmap route", async () => {
 });
 
 test("implements usable help, settings, and challenge controls", async () => {
-  const [page, css, layout, accountAccess] = await Promise.all([
+  const [page, css, layout, accountAccess, client] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/account-access.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/client.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /setPanel\("help"\)/);
@@ -66,8 +67,10 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(page, /<AccountAccess/);
   assert.match(accountAccess, /signUp/);
   assert.match(accountAccess, /signInWithPassword/);
+  assert.match(accountAccess, /Email confirmation took too long/);
   assert.match(accountAccess, /Try Demo access/);
   assert.match(accountAccess, /Continue with ChatGPT/);
   assert.match(css, /\.auth-dialog/);
   assert.match(accountAccess, /hasSupabaseAuth/);
+  assert.match(client, /fetchWithAuthTimeout/);
 });
