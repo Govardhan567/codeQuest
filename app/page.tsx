@@ -390,6 +390,22 @@ function readChallengeTestResults(stdout: string): ChallengeTestResult[] | null 
   return null;
 }
 
+function ChallengeTestSummary({ testCases, results }: { testCases: ChallengeTestCase[]; results: ChallengeTestResult[] }) {
+  return <section className="challenge-test-summary" aria-live="polite">
+    <div className="challenge-test-summary__head"><b>Test cases</b><span>{testCases.length} total</span></div>
+    <ol>
+      {testCases.map((testCase) => {
+        const result = results.find((item) => item.label === testCase.label);
+        return <li key={testCase.label} className={result ? result.passed ? "challenge-test-case challenge-test-case--passed" : "challenge-test-case challenge-test-case--failed" : "challenge-test-case"}>
+          <div><b>{testCase.label}</b><code>{testCase.call}</code></div>
+          <span>{!result ? "Ready" : result.passed ? "Passed" : "Failed"}</span>
+          {result && !result.passed && <small>Expected {result.expected}; received {result.actual}</small>}
+        </li>;
+      })}
+    </ol>
+  </section>;
+}
+
 function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string) => void }) {
   const [selected, setSelected] = useState("Two Sum");
   const [topicFilter, setTopicFilter] = useState("All topics");
@@ -399,6 +415,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
   const [code, setCode] = useState(challengeContent["Two Sum"].starterCode);
   const [runState, setRunState] = useState("Ready to run the sample test.");
   const [isRunning, setIsRunning] = useState(false);
+  const [testResults, setTestResults] = useState<ChallengeTestResult[]>([]);
   const visibleChallenges = challenges.filter((challenge) => topicFilter === "All topics" || challenge.topic.startsWith(topicFilter));
   const selectedChallenge = challenges.find((challenge) => challenge.title === selected) ?? challenges[0];
   const details = challengeContent[selectedChallenge.title];
@@ -408,6 +425,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
     setSelected(title);
     setCode(challengeContent[title].starterCode);
     setRunState("Ready to run the sample test.");
+    setTestResults([]);
     setActiveTab("solution");
   };
 
@@ -426,6 +444,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
       if (submit) {
         const results = readChallengeTestResults(result.stdout);
         if (!results) throw new Error("The test results could not be read. Please try again.");
+        setTestResults(results);
         const passedCount = results.filter((test) => test.passed).length;
         if (passedCount !== results.length) {
           const failures = results.filter((test) => !test.passed)
@@ -439,6 +458,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
         return;
       }
       const output = result.stdout.trim();
+      setTestResults([]);
       setRunState(`Program output: ${output || "(no output)"}`);
     } catch (error) {
       setRunState(error instanceof Error ? error.message : "Unable to run the sample test.");
@@ -458,6 +478,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
       <article className="editor-card card"><div className="editor-top"><div><span className="eyebrow">{selectedChallenge.difficulty.toUpperCase()} · {selectedChallenge.topic.toUpperCase()}</span><h2>{selected}</h2></div><span className="editor-lang">Python</span></div><p>{details.description}</p><div className="tabs" role="tablist" aria-label="Challenge workspace"><button type="button" role="tab" aria-selected={activeTab === "solution"} className={activeTab === "solution" ? "tab--active" : ""} onClick={() => setActiveTab("solution")}>Solution.py</button><button type="button" role="tab" aria-selected={activeTab === "tests"} className={activeTab === "tests" ? "tab--active" : ""} onClick={() => setActiveTab("tests")}>Test cases</button></div>{activeTab === "solution" ? <textarea className="challenge-editor" aria-label={`${selected} solution`} value={code} onChange={(event) => setCode(event.target.value)} spellCheck="false" /> : <div className="test-cases" role="tabpanel"><b>Sample test</b><pre>{details.testCase}</pre><p>Run the current solution to see its output below.</p></div>}<div className="run-result" role="status" aria-live="polite">{runState}</div><div className="editor-actions"><button className="button button--ghost" type="button" onClick={() => runChallenge()} disabled={isRunning}>{isRunning ? "Running…" : "▷ Run code"}</button><button className="button button--primary" type="button" onClick={() => runChallenge(true)} disabled={isRunning}>{isRunning ? "Checking…" : "Submit solution"}</button></div></article>
       <aside className="hint-panel card"><div className="hint-head"><span className="spark-icon">✦</span><div><b>Quest Guide</b><small>Hint-focused tutor</small></div><i>●</i></div><div className="chat-bubble">{message}</div><div className="hint-steps"><span>1</span><p><b>Try this first</b><br />{details.hint}</p></div><form className="hint-input" onSubmit={(event) => { event.preventDefault(); sendHint(); }}><input aria-label="Ask your tutor for help" value={hintQuestion} onChange={(event) => setHintQuestion(event.target.value)} placeholder="Ask for a hint…" /><button aria-label="Send hint request" type="submit">↑</button></form></aside>
     </div>
+    <ChallengeTestSummary testCases={selectedTestCases} results={testResults} />
   </section>;
 }
 

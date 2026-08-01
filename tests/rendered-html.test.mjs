@@ -80,4 +80,6 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(page, /All \$\{results\.length\} test cases passed/);
   assert.match(page, /Duplicate values/);
   assert.match(page, /Incorrect nesting/);
+  assert.match(page, /ChallengeTestSummary/);
+  assert.match(css, /\.challenge-test-summary/);
 });
