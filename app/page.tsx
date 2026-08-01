@@ -133,6 +133,8 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const [serverProgressReady, setServerProgressReady] = useState(false);
 
   const selectedTopic = pythonTopics.find((topic) => topic.id === selectedTopicId) ?? pythonTopics[0];
+  const nextTopic = pythonTopics.find((topic) => topic.position === selectedTopic.position + 1);
+  const canMoveNext = completedIds.includes(selectedTopic.id) && nextTopic;
   const completedCount = completedIds.length;
   const progressPercent = Math.round((completedCount / pythonTopics.length) * 100);
 
@@ -198,19 +200,22 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
       const result = await response.json() as { passed?: boolean; actualOutput?: string; expectedOutput?: string; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Unable to check that code.");
 
-      setCheckState({ passed: result.passed, actual: result.actualOutput, expected: result.expectedOutput });
+      setCheckState({
+        passed: result.passed,
+        actual: result.actualOutput,
+        expected: result.expectedOutput,
+        message: result.passed ? nextTopic ? `Correct! Opening ${nextTopic.title}…` : "Python foundations complete — great work!" : undefined,
+      });
       if (result.passed) {
         const nextCompleted = [...new Set([...completedIds, selectedTopic.id])];
         setCompletedIds(nextCompleted);
         window.localStorage.setItem("codequest-python-preview-progress", JSON.stringify(nextCompleted));
+        if (nextTopic) window.setTimeout(() => openTopic(nextTopic), 1_000);
       }
     } catch (error) {
       setCheckState({ message: error instanceof Error ? error.message : "Unable to check that code." });
     }
   };
-
-  const nextTopic = pythonTopics.find((topic) => topic.position === selectedTopic.position + 1);
-  const canMoveNext = completedIds.includes(selectedTopic.id) && nextTopic;
 
   if (stage === "languages") {
     return <section className="learn-hub workspace-view">
@@ -436,6 +441,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
   };
 
   const runChallenge = async (submit = false) => {
+    let advancesToNextChallenge = false;
     setIsRunning(true);
     setRunState(submit ? "Running every test case…" : "Running your code…");
     try {
@@ -453,8 +459,19 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
           setRunState(`${passedCount}/${results.length} test cases passed. ${failures}`);
           return;
         }
-        setRunState(`All ${results.length} test cases passed — solution accepted.`);
+        const currentIndex = visibleChallenges.findIndex((challenge) => challenge.title === selectedChallenge.title);
+        const nextChallenge = visibleChallenges[currentIndex + 1];
         onGainXp(selectedChallenge.xp, selectedChallenge.title);
+        if (nextChallenge) {
+          advancesToNextChallenge = true;
+          setRunState(`All ${results.length} test cases passed — moving to ${nextChallenge.title}…`);
+          window.setTimeout(() => {
+            chooseChallenge(nextChallenge.title);
+            setIsRunning(false);
+          }, 1_000);
+          return;
+        }
+        setRunState(`All ${results.length} test cases passed — challenge set complete!`);
         return;
       }
       const output = result.stdout.trim();
@@ -463,7 +480,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
     } catch (error) {
       setRunState(error instanceof Error ? error.message : "Unable to run the sample test.");
     } finally {
-      setIsRunning(false);
+      if (!advancesToNextChallenge) setIsRunning(false);
     }
   };
 

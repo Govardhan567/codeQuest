@@ -82,4 +82,6 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(page, /Incorrect nesting/);
   assert.match(page, /ChallengeTestSummary/);
   assert.match(css, /\.challenge-test-summary/);
+  assert.match(page, /Opening \$\{nextTopic\.title\}/);
+  assert.match(page, /moving to \$\{nextChallenge\.title\}/);
 });
