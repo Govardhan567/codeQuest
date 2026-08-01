@@ -86,4 +86,7 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(page, /moving to \$\{nextChallenge\.title\}/);
   assert.match(page, /checkState\.passed/);
   assert.match(page, /onClick=\{goToNextTopic\}/);
+  assert.match(page, /checkExecutionLocally/);
+  assert.match(page, /This topic is unlocked in this browser/);
+  assert.match(page, /Your code ran, but this task requires exactly the expected output/);
 });

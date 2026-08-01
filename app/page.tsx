@@ -130,7 +130,6 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const [code, setCode] = useState((pythonTopics.find((topic) => topic.id === initialTopicId) ?? pythonTopics[0]).starterCode);
   const [consoleState, setConsoleState] = useState<ConsoleState>({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
   const [checkState, setCheckState] = useState<{ passed?: boolean; actual?: string; expected?: string; message?: string }>({});
-  const [serverProgressReady, setServerProgressReady] = useState(false);
 
   const selectedTopic = pythonTopics.find((topic) => topic.id === selectedTopicId) ?? pythonTopics[0];
   const nextTopic = pythonTopics.find((topic) => topic.position === selectedTopic.position + 1);
@@ -153,9 +152,8 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
       .then(async (response) => response.ok ? response.json() : Promise.reject())
       .then((topics: { id: number; status: string }[]) => {
         setCompletedIds(topics.filter((topic) => topic.status === "completed").map((topic) => topic.id));
-        setServerProgressReady(true);
       })
-      .catch(() => setServerProgressReady(false));
+      .catch(() => undefined);
   }, []);
 
   const statusFor = (topic: PythonTopic) => {
@@ -178,18 +176,50 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
     openTopic(nextTopic);
   };
 
+  const normalizeTaskOutput = (output: string) => output.replace(/\r\n?/g, "\n").trimEnd();
+
+  const recordLocalCompletion = () => {
+    const nextCompleted = [...new Set([...completedIds, selectedTopic.id])];
+    setCompletedIds(nextCompleted);
+    window.localStorage.setItem("codequest-python-preview-progress", JSON.stringify(nextCompleted));
+  };
+
+  const checkExecutionLocally = (execution: { stdout: string; stderr: string; exitCode: number }, checkedWithButton: boolean) => {
+    const actualOutput = normalizeTaskOutput(execution.stdout);
+    const expectedOutput = normalizeTaskOutput(selectedTopic.expectedOutput);
+    const passed = execution.exitCode === 0 && actualOutput === expectedOutput;
+
+    setCheckState({
+      passed,
+      actual: actualOutput,
+      expected: expectedOutput,
+      message: passed
+        ? checkedWithButton
+          ? nextTopic ? `Correct! Opening ${nextTopic.title}…` : "Python foundations complete — great work!"
+          : "Correct! The next topic is now unlocked."
+        : execution.exitCode === 0
+          ? "Your code ran, but this task requires exactly the expected output."
+          : "Fix the Python error, then run the task again.",
+    });
+
+    if (passed) recordLocalCompletion();
+    return passed;
+  };
+
   const runCode = async () => {
     setConsoleState({ kind: "running", stdout: "", stderr: "", label: "Starting Python…" });
     try {
-      const result = await runPythonInBrowser(code);
+      const result = await runPythonInBrowser(code, selectedTopic.taskInput ?? "");
       setConsoleState({
         kind: result.exitCode === 0 ? "success" : "error",
         stdout: result.stdout,
         stderr: result.stderr,
         label: result.exitCode === 0 ? "Finished" : "Finished with an error",
       });
+      checkExecutionLocally(result, false);
     } catch (error) {
       setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Python unavailable" });
+      setCheckState({ message: error instanceof Error ? error.message : "Unable to run that code." });
     }
   };
 
@@ -197,28 +227,33 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
     setCheckState({ message: "Checking your solution…" });
     try {
       const execution = await runPythonInBrowser(code, selectedTopic.taskInput ?? "");
+      if (!checkExecutionLocally(execution, true)) return;
+
       const response = await fetch(`/api/learn/python/topics/${selectedTopic.id}/check`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(execution),
       });
-      const result = await response.json() as { passed?: boolean; actualOutput?: string; expectedOutput?: string; error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Unable to check that code.");
-
-      setCheckState({
-        passed: result.passed,
-        actual: result.actualOutput,
-        expected: result.expectedOutput,
-        message: result.passed ? nextTopic ? `Correct! Opening ${nextTopic.title}…` : "Python foundations complete — great work!" : undefined,
-      });
-      if (result.passed) {
-        const nextCompleted = [...new Set([...completedIds, selectedTopic.id])];
-        setCompletedIds(nextCompleted);
-        window.localStorage.setItem("codequest-python-preview-progress", JSON.stringify(nextCompleted));
-        if (nextTopic) window.setTimeout(() => openTopic(nextTopic), 1_000);
+      if (!response.ok) {
+        if (response.status === 401) {
+          setCheckState((current) => ({
+            ...current,
+            message: "Correct! This topic is unlocked in this browser. Sign in to save progress across devices.",
+          }));
+        } else {
+          const result = await response.json().catch(() => null) as { error?: string } | null;
+          setCheckState((current) => ({
+            ...current,
+            message: result?.error ?? "Correct! This topic is unlocked in this browser. Progress could not be synced yet.",
+          }));
+        }
       }
-    } catch (error) {
-      setCheckState({ message: error instanceof Error ? error.message : "Unable to check that code." });
+      if (nextTopic) window.setTimeout(() => openTopic(nextTopic), 1_000);
+    } catch {
+      setCheckState((current) => ({
+        ...current,
+        message: "Correct! This topic is unlocked in this browser. Progress could not be synced yet.",
+      }));
     }
   };
 
@@ -293,7 +328,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
         <button className="lesson-check" onClick={checkTask}>Check solution</button>
         {checkState.message && <p className="lesson-check-message">{checkState.message}</p>}
         {checkState.passed !== undefined && <div className={checkState.passed ? "lesson-result lesson-result--pass" : "lesson-result lesson-result--fail"}><b>{checkState.passed ? "Nice work — topic complete!" : "Not quite yet"}</b>{!checkState.passed && <><span>Expected</span><code>{checkState.expected}</code><span>Your output</span><code>{checkState.actual || "(no output)"}</code></>}</div>}
-        <div className="lesson-next"><button disabled={!canMoveNext} onClick={goToNextTopic}>{nextTopic ? "Next topic →" : "Python foundations complete"}</button>{!completedIds.includes(selectedTopic.id) && !checkState.passed && <small>{serverProgressReady ? "Pass the task to unlock the next topic." : "Sign in and configure the sandbox to save progress."}</small>}</div>
+        <div className="lesson-next"><button disabled={!canMoveNext} onClick={goToNextTopic}>{nextTopic ? "Next topic →" : "Python foundations complete"}</button>{!completedIds.includes(selectedTopic.id) && !checkState.passed && <small>Run or check the task to unlock the next topic. Sign in to save progress across devices.</small>}</div>
       </aside>
     </div>
   </section>;
