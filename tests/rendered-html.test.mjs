@@ -77,4 +77,7 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(client, /fetchWithAuthTimeout/);
   assert.match(page, /runPythonInBrowser/);
   assert.match(page, /Runs privately in your browser/);
+  assert.match(page, /All \$\{results\.length\} test cases passed/);
+  assert.match(page, /Duplicate values/);
+  assert.match(page, /Incorrect nesting/);
 });

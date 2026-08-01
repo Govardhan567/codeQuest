@@ -340,6 +340,56 @@ const challengeContent: Record<string, { description: string; starterCode: strin
   "Merge Intervals": { description: "Merge overlapping ranges into the smallest set of non-overlapping intervals.", starterCode: "def merge_intervals(intervals):\n    intervals.sort(key=lambda interval: interval[0])\n    merged = []\n    for start, end in intervals:\n        if not merged or start > merged[-1][1]:\n            merged.append([start, end])\n        else:\n            merged[-1][1] = max(merged[-1][1], end)\n    return merged\n\nprint(merge_intervals([[1, 3], [2, 6], [8, 10]]))", testCase: "Input: [[1, 3], [2, 6], [8, 10]]\nExpected output: [[1, 6], [8, 10]]", expectedOutput: "[[1, 6], [8, 10]]", hint: "Sort ranges by their first value, then compare each new range with the last merged range." },
 };
 
+type ChallengeTestCase = { label: string; call: string; expected: unknown };
+type ChallengeTestResult = { label: string; passed: boolean; actual: string; expected: string };
+
+const challengeTestCases: Record<string, ChallengeTestCase[]> = {
+  "Two Sum": [
+    { label: "Example pair", call: "two_sum([2, 7, 11, 15], 9)", expected: [0, 1] },
+    { label: "Values out of order", call: "two_sum([3, 2, 4], 6)", expected: [1, 2] },
+    { label: "Duplicate values", call: "two_sum([3, 3], 6)", expected: [0, 1] },
+  ],
+  "Valid Parentheses": [
+    { label: "Balanced groups", call: "is_valid('()[]{}')", expected: true },
+    { label: "Mismatched pair", call: "is_valid('(]')", expected: false },
+    { label: "Incorrect nesting", call: "is_valid('([)]')", expected: false },
+    { label: "Nested groups", call: "is_valid('{[]}')", expected: true },
+  ],
+  "Longest Substring": [
+    { label: "Repeating pattern", call: "longest_unique_substring('abcabcbb')", expected: 3 },
+    { label: "One repeated character", call: "longest_unique_substring('bbbbb')", expected: 1 },
+    { label: "Overlapping window", call: "longest_unique_substring('pwwkew')", expected: 3 },
+    { label: "Empty string", call: "longest_unique_substring('')", expected: 0 },
+  ],
+  "Merge Intervals": [
+    { label: "Separate ranges", call: "merge_intervals([[1, 3], [2, 6], [8, 10]])", expected: [[1, 6], [8, 10]] },
+    { label: "Touching ranges", call: "merge_intervals([[1, 4], [4, 5]])", expected: [[1, 5]] },
+    { label: "Same ending", call: "merge_intervals([[1, 4], [0, 4]])", expected: [[0, 4]] },
+  ],
+};
+
+const TEST_RESULT_MARKER = "__CODEQUEST_TEST_RESULTS__";
+
+function buildChallengeTestHarness(code: string, testCases: ChallengeTestCase[]) {
+  const serializedCases = JSON.stringify(testCases);
+  return `${code}\n\nimport json\n__codequest_cases = json.loads(${JSON.stringify(serializedCases)})\n__codequest_results = []\nfor __codequest_case in __codequest_cases:\n    try:\n        __codequest_actual = eval(__codequest_case[\"call\"])\n        __codequest_expected = __codequest_case[\"expected\"]\n        __codequest_results.append({\n            \"label\": __codequest_case[\"label\"],\n            \"passed\": __codequest_actual == __codequest_expected,\n            \"actual\": repr(__codequest_actual),\n            \"expected\": repr(__codequest_expected),\n        })\n    except Exception as __codequest_error:\n        __codequest_results.append({\n            \"label\": __codequest_case[\"label\"],\n            \"passed\": False,\n            \"actual\": f\"Error: {__codequest_error}\",\n            \"expected\": repr(__codequest_case[\"expected\"]),\n        })\nprint(${JSON.stringify(TEST_RESULT_MARKER)} + json.dumps(__codequest_results))`;
+}
+
+function readChallengeTestResults(stdout: string): ChallengeTestResult[] | null {
+  const lines = stdout.split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (!line.startsWith(TEST_RESULT_MARKER)) continue;
+    try {
+      const results = JSON.parse(line.slice(TEST_RESULT_MARKER.length)) as ChallengeTestResult[];
+      return Array.isArray(results) ? results : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string) => void }) {
   const [selected, setSelected] = useState("Two Sum");
   const [topicFilter, setTopicFilter] = useState("All topics");
@@ -352,6 +402,7 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
   const visibleChallenges = challenges.filter((challenge) => topicFilter === "All topics" || challenge.topic.startsWith(topicFilter));
   const selectedChallenge = challenges.find((challenge) => challenge.title === selected) ?? challenges[0];
   const details = challengeContent[selectedChallenge.title];
+  const selectedTestCases = challengeTestCases[selectedChallenge.title];
 
   const chooseChallenge = (title: string) => {
     setSelected(title);
@@ -368,18 +419,27 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
 
   const runChallenge = async (submit = false) => {
     setIsRunning(true);
-    setRunState("Running the sample test…");
+    setRunState(submit ? "Running every test case…" : "Running your code…");
     try {
-      const result = await runPythonInBrowser(code);
-      if (result.exitCode !== 0) throw new Error(result.stderr || "The sample test did not finish.");
-      const output = result.stdout.trim();
-      const passed = output === details.expectedOutput;
-      if (submit && !passed) {
-        setRunState(`Sample output: ${output || "(no output)"}. Expected: ${details.expectedOutput}. Update your solution and try again.`);
+      const result = await runPythonInBrowser(submit ? buildChallengeTestHarness(code, selectedTestCases) : code);
+      if (result.exitCode !== 0) throw new Error(result.stderr || "The code did not finish.");
+      if (submit) {
+        const results = readChallengeTestResults(result.stdout);
+        if (!results) throw new Error("The test results could not be read. Please try again.");
+        const passedCount = results.filter((test) => test.passed).length;
+        if (passedCount !== results.length) {
+          const failures = results.filter((test) => !test.passed)
+            .map((test) => `${test.label}: expected ${test.expected}, got ${test.actual}`)
+            .join(" | ");
+          setRunState(`${passedCount}/${results.length} test cases passed. ${failures}`);
+          return;
+        }
+        setRunState(`All ${results.length} test cases passed — solution accepted.`);
+        onGainXp(selectedChallenge.xp, selectedChallenge.title);
         return;
       }
-      setRunState(`Sample output: ${output || "(no output)"}${submit ? " — solution accepted." : ""}`);
-      if (submit) onGainXp(selectedChallenge.xp, selectedChallenge.title);
+      const output = result.stdout.trim();
+      setRunState(`Program output: ${output || "(no output)"}`);
     } catch (error) {
       setRunState(error instanceof Error ? error.message : "Unable to run the sample test.");
     } finally {
