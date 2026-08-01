@@ -134,7 +134,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
 
   const selectedTopic = pythonTopics.find((topic) => topic.id === selectedTopicId) ?? pythonTopics[0];
   const nextTopic = pythonTopics.find((topic) => topic.position === selectedTopic.position + 1);
-  const canMoveNext = completedIds.includes(selectedTopic.id) && nextTopic;
+  const canMoveNext = Boolean(nextTopic && (completedIds.includes(selectedTopic.id) || checkState.passed));
   const completedCount = completedIds.length;
   const progressPercent = Math.round((completedCount / pythonTopics.length) * 100);
 
@@ -171,6 +171,11 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
     setConsoleState({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
     setCheckState({});
     setStage("lesson");
+  };
+
+  const goToNextTopic = () => {
+    if (!canMoveNext || !nextTopic) return;
+    openTopic(nextTopic);
   };
 
   const runCode = async () => {
@@ -288,7 +293,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
         <button className="lesson-check" onClick={checkTask}>Check solution</button>
         {checkState.message && <p className="lesson-check-message">{checkState.message}</p>}
         {checkState.passed !== undefined && <div className={checkState.passed ? "lesson-result lesson-result--pass" : "lesson-result lesson-result--fail"}><b>{checkState.passed ? "Nice work — topic complete!" : "Not quite yet"}</b>{!checkState.passed && <><span>Expected</span><code>{checkState.expected}</code><span>Your output</span><code>{checkState.actual || "(no output)"}</code></>}</div>}
-        <div className="lesson-next"><button disabled={!canMoveNext} onClick={() => nextTopic && openTopic(nextTopic)}>{nextTopic ? "Next topic →" : "Python foundations complete"}</button>{!completedIds.includes(selectedTopic.id) && <small>{serverProgressReady ? "Pass the task to unlock the next topic." : "Sign in and configure the sandbox to save progress."}</small>}</div>
+        <div className="lesson-next"><button disabled={!canMoveNext} onClick={goToNextTopic}>{nextTopic ? "Next topic →" : "Python foundations complete"}</button>{!completedIds.includes(selectedTopic.id) && !checkState.passed && <small>{serverProgressReady ? "Pass the task to unlock the next topic." : "Sign in and configure the sandbox to save progress."}</small>}</div>
       </aside>
     </div>
   </section>;
