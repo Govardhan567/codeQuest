@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AccountAccess, type CodeQuestAccount } from "@/app/account-access";
+import { runPythonInBrowser } from "@/lib/browser-python-runner";
 import { learnLanguages, pythonTopics, type PythonTopic } from "@/lib/learn-content";
 
 const CodeEditor = dynamic(() => import("@monaco-editor/react"), {
@@ -171,33 +172,28 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   };
 
   const runCode = async () => {
-    setConsoleState({ kind: "running", stdout: "", stderr: "", label: "Running in the sandbox…" });
+    setConsoleState({ kind: "running", stdout: "", stderr: "", label: "Starting Python…" });
     try {
-      const response = await fetch("/api/learn/run", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ language: "python", code }),
-      });
-      const result = await response.json() as { stdout?: string; stderr?: string; exitCode?: number; error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Unable to run that code.");
+      const result = await runPythonInBrowser(code);
       setConsoleState({
         kind: result.exitCode === 0 ? "success" : "error",
-        stdout: result.stdout ?? "",
-        stderr: result.stderr ?? "",
+        stdout: result.stdout,
+        stderr: result.stderr,
         label: result.exitCode === 0 ? "Finished" : "Finished with an error",
       });
     } catch (error) {
-      setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Sandbox unavailable" });
+      setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Python unavailable" });
     }
   };
 
   const checkTask = async () => {
-    setCheckState({ message: "Checking your solution in the sandbox…" });
+    setCheckState({ message: "Checking your solution…" });
     try {
+      const execution = await runPythonInBrowser(code, selectedTopic.taskInput ?? "");
       const response = await fetch(`/api/learn/python/topics/${selectedTopic.id}/check`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(execution),
       });
       const result = await response.json() as { passed?: boolean; actualOutput?: string; expectedOutput?: string; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Unable to check that code.");
@@ -277,7 +273,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
       <article className="lesson-code card">
         <div className="lesson-code__head"><span className="lesson-panel-label">02 · Try it</span><span>main.py</span></div>
         <CodeEditor height="300px" defaultLanguage="python" language="python" value={code} onChange={(value) => setCode(value ?? "")} theme="vs-dark" options={{ minimap: { enabled: false }, fontSize: 14, lineNumbers: "on", scrollBeyondLastLine: false, padding: { top: 14, bottom: 14 }, automaticLayout: true }} />
-        <div className="lesson-runbar"><button className="lesson-run" onClick={runCode} disabled={consoleState.kind === "running"}>{consoleState.kind === "running" ? "Running…" : "▷ Run code"}</button><span>Executes in a remote sandbox</span></div>
+        <div className="lesson-runbar"><button className="lesson-run" onClick={runCode} disabled={consoleState.kind === "running"}>{consoleState.kind === "running" ? "Running…" : "▷ Run code"}</button><span>Runs privately in your browser</span></div>
         <div className={`lesson-console lesson-console--${consoleState.kind}`} role="status" aria-live="polite"><div><b>Output</b><span>{consoleState.label}</span></div>{consoleState.stdout && <pre>{consoleState.stdout}</pre>}{consoleState.stderr && <pre className="lesson-console__error">{consoleState.stderr}</pre>}{!consoleState.stdout && !consoleState.stderr && <pre className="lesson-console__empty">{consoleState.label}</pre>}</div>
       </article>
       <aside className="lesson-task card">
@@ -374,10 +370,9 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
     setIsRunning(true);
     setRunState("Running the sample test…");
     try {
-      const response = await fetch("/api/learn/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ language: "python", code }) });
-      const result = await response.json() as { stdout?: string; stderr?: string; exitCode?: number; error?: string };
-      if (!response.ok || result.exitCode !== 0) throw new Error(result.error ?? result.stderr ?? "The sample test did not finish.");
-      const output = result.stdout?.trim() ?? "";
+      const result = await runPythonInBrowser(code);
+      if (result.exitCode !== 0) throw new Error(result.stderr || "The sample test did not finish.");
+      const output = result.stdout.trim();
       const passed = output === details.expectedOutput;
       if (submit && !passed) {
         setRunState(`Sample output: ${output || "(no output)"}. Expected: ${details.expectedOutput}. Update your solution and try again.`);

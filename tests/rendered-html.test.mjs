@@ -75,4 +75,6 @@ test("implements usable help, settings, and challenge controls", async () => {
   assert.match(css, /\.auth-dialog/);
   assert.match(accountAccess, /hasSupabaseAuth/);
   assert.match(client, /fetchWithAuthTimeout/);
+  assert.match(page, /runPythonInBrowser/);
+  assert.match(page, /Runs privately in your browser/);
 });
