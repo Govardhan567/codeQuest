@@ -127,7 +127,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const [stage, setStage] = useState<LearnStage>(initialStage);
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState(initialTopicId);
-  const [code, setCode] = useState((pythonTopics.find((topic) => topic.id === initialTopicId) ?? pythonTopics[0]).starterCode);
+  const [code, setCode] = useState("");
   const [consoleState, setConsoleState] = useState<ConsoleState>({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
   const [checkState, setCheckState] = useState<{ passed?: boolean; actual?: string; expected?: string; message?: string }>({});
 
@@ -165,7 +165,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const openTopic = (topic: PythonTopic) => {
     if (statusFor(topic) === "locked") return;
     setSelectedTopicId(topic.id);
-    setCode(topic.starterCode);
+    setCode("");
     setConsoleState({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
     setCheckState({});
     setStage("lesson");
@@ -207,14 +207,36 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   };
 
   const runCode = async () => {
+    if (!code.trim()) {
+      setConsoleState({
+        kind: "error",
+        stdout: "",
+        stderr: "Write your solution before running it. Start with one small step from the example, then try again.",
+        label: "Write code first",
+      });
+      setCheckState({
+        passed: false,
+        actual: "",
+        expected: normalizeTaskOutput(selectedTopic.expectedOutput),
+        message: "Your editor is empty. Use the example and task instructions to write a solution first.",
+      });
+      return;
+    }
+
     setConsoleState({ kind: "running", stdout: "", stderr: "", label: "Starting Python…" });
     try {
       const result = await runPythonInBrowser(code, selectedTopic.taskInput ?? "");
+      const actualOutput = normalizeTaskOutput(result.stdout);
+      const expectedOutput = normalizeTaskOutput(selectedTopic.expectedOutput);
+      const passed = result.exitCode === 0 && actualOutput === expectedOutput;
+      const guidance = result.stderr || (passed
+        ? ""
+        : `Your output does not match the task yet. Expected: ${expectedOutput || "(no output)"}. Check the task wording and try one small change.`);
       setConsoleState({
-        kind: result.exitCode === 0 ? "success" : "error",
+        kind: passed ? "success" : "error",
         stdout: result.stdout,
-        stderr: result.stderr,
-        label: result.exitCode === 0 ? "Finished" : "Finished with an error",
+        stderr: guidance,
+        label: passed ? "Finished" : result.exitCode === 0 ? "Needs changes" : "Finished with an error",
       });
       checkExecutionLocally(result, false);
     } catch (error) {
