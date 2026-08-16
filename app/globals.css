@@ -205,8 +205,9 @@ nav { display: grid; gap: 4px; }
 .lesson-code__head { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #38344c; }
 .lesson-code__head > span:last-child { border: 1px solid #47415e; border-radius: 6px; color: #bcb6cd; padding: 4px 7px; font: 9px "SFMono-Regular", Consolas, monospace; }
 .learn-editor-loading { min-height: 142px; display: grid; place-items: center; color: #968fa8; background: #15141f; font-size: 11px; }
-.lesson-code .learn-editor-loading { min-height: 300px; }
+.lesson-code .learn-editor-loading { min-height: 480px; }
 .lesson-code .monaco-editor, .lesson-code .overflow-guard { background: #15141f !important; }
+.lesson-code .monaco-editor .margin { background: #15141f !important; }
 .lesson-runner-controls { display: grid; gap: 11px; padding: 12px 14px; border-top: 1px solid #37334a; background: #211e32; }
 .lesson-runner-controls__tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lesson-runner-controls__tools button { border: 0; background: transparent; color: #b9b0f4; cursor: pointer; padding: 0; font-size: 10px; font-weight: 750; }

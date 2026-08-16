@@ -377,7 +377,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
       </article>
       <article className="lesson-code card">
         <div className="lesson-code__head"><span className="lesson-panel-label">02 · Try it</span><span>main.py</span></div>
-        <CodeEditor height="300px" defaultLanguage="python" language="python" value={code} onChange={(value) => setCode(value ?? "")} theme="vs-dark" options={{ minimap: { enabled: false }, fontSize: 14, lineNumbers: "on", scrollBeyondLastLine: false, padding: { top: 14, bottom: 14 }, automaticLayout: true }} />
+        <CodeEditor height="480px" defaultLanguage="python" language="python" value={code} onChange={(value) => setCode(value ?? "")} theme="vs-dark" options={{ minimap: { enabled: false }, fontSize: 14, lineNumbers: "on", scrollBeyondLastLine: false, folding: false, padding: { top: 14, bottom: 14 }, automaticLayout: true }} />
         <div className="lesson-runner-controls">
           <div className="lesson-runner-controls__tools"><button type="button" onClick={() => setCode(selectedTopic.starterCode)}>Load starter code</button><span>Python 3</span></div>
           <label className="lesson-custom-toggle"><input type="checkbox" checked={useCustomInput} onChange={(event) => setUseCustomInput(event.target.checked)} /> Test against custom input</label>
