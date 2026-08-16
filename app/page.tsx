@@ -12,7 +12,7 @@ const CodeEditor = dynamic(() => import("@monaco-editor/react"), {
   loading: () => <div className="learn-editor-loading">Preparing editor…</div>,
 });
 
-type View = "dashboard" | "learn" | "practice" | "challenges" | "leaderboard";
+type View = "dashboard" | "learn" | "practice" | "challenges" | "compiler" | "leaderboard";
 type Panel = "help" | "settings" | "quest" | null;
 
 const navItems: { id: View; label: string; icon: string }[] = [
@@ -22,6 +22,8 @@ const navItems: { id: View; label: string; icon: string }[] = [
   { id: "challenges", label: "Challenges", icon: "◇" },
   { id: "leaderboard", label: "Leaderboard", icon: "♕" },
 ];
+
+navItems.splice(4, 0, { id: "compiler", label: "Code runner", icon: "Run" });
 
 const languages = [
   { name: "Python", icon: "⌘", lessons: "8 / 24 lessons", percent: 34, color: "#f5c451" },
@@ -120,7 +122,14 @@ function HomeView({ onNavigate, xp, onPractice, onOpenQuest }: { onNavigate: (vi
 }
 
 type LearnStage = "languages" | "roadmap" | "lesson";
-type ConsoleState = { kind: "idle" | "running" | "success" | "error"; stdout: string; stderr: string; label: string };
+type ConsoleState = {
+  kind: "idle" | "running" | "success" | "error";
+  stdout: string;
+  stderr: string;
+  label: string;
+  runPassed?: boolean;
+  outputPassed?: boolean;
+};
 
 function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initialStage?: LearnStage; initialTopicId?: number }) {
   const router = useRouter();
@@ -213,6 +222,8 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
         stdout: "",
         stderr: "Write your solution before running it. Start with one small step from the example, then try again.",
         label: "Write code first",
+        runPassed: false,
+        outputPassed: false,
       });
       setCheckState({
         passed: false,
@@ -237,10 +248,12 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
         stdout: result.stdout,
         stderr: guidance,
         label: passed ? "Finished" : result.exitCode === 0 ? "Needs changes" : "Finished with an error",
+        runPassed: result.exitCode === 0,
+        outputPassed: passed,
       });
       checkExecutionLocally(result, false);
     } catch (error) {
-      setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Python unavailable" });
+      setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Python unavailable", runPassed: false, outputPassed: false });
       setCheckState({ message: error instanceof Error ? error.message : "Unable to run that code." });
     }
   };
@@ -347,6 +360,19 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
         <span className="lesson-panel-label">03 · Practice task</span>
         <div className="lesson-task__badge">{selectedTopic.position.toString().padStart(2, "0")}</div><h2>{selectedTopic.taskTitle}</h2><p>{selectedTopic.taskDescription}</p>
         {selectedTopic.taskInput && <div className="lesson-input-note"><b>Checker input</b><code>Ada</code></div>}
+        <section className="lesson-test-cases" aria-live="polite">
+          <div className="lesson-test-cases__head"><b>Test cases</b><span>2 checks</span></div>
+          <ol>
+            <li className={consoleState.runPassed === undefined ? "lesson-test-case" : consoleState.runPassed ? "lesson-test-case lesson-test-case--passed" : "lesson-test-case lesson-test-case--failed"}>
+              <div><b>Code runs</b><small>Your solution must run without a Python error.</small></div>
+              <span>{consoleState.runPassed === undefined ? "Ready" : consoleState.runPassed ? "Passed" : "Failed"}</span>
+            </li>
+            <li className={consoleState.outputPassed === undefined ? "lesson-test-case" : consoleState.outputPassed ? "lesson-test-case lesson-test-case--passed" : "lesson-test-case lesson-test-case--failed"}>
+              <div><b>Required output</b><small>{selectedTopic.taskInput ? `Input: ${selectedTopic.taskInput}` : "No input"} · Expected: <code>{selectedTopic.expectedOutput}</code></small></div>
+              <span>{consoleState.outputPassed === undefined ? "Ready" : consoleState.outputPassed ? "Passed" : "Failed"}</span>
+            </li>
+          </ol>
+        </section>
         <button className="lesson-check" onClick={checkTask}>Check solution</button>
         {checkState.message && <p className="lesson-check-message">{checkState.message}</p>}
         {checkState.passed !== undefined && <div className={checkState.passed ? "lesson-result lesson-result--pass" : "lesson-result lesson-result--fail"}><b>{checkState.passed ? "Nice work — topic complete!" : "Not quite yet"}</b>{!checkState.passed && <><span>Expected</span><code>{checkState.expected}</code><span>Your output</span><code>{checkState.actual || "(no output)"}</code></>}</div>}
@@ -473,6 +499,60 @@ function ChallengeTestSummary({ testCases, results }: { testCases: ChallengeTest
   </section>;
 }
 
+type RunnerLanguage = { id: number; name: string };
+type RunnerResult = { stdout: string; stderr: string; compileOutput: string; message: string; time: string | null; memory: number | null; status: { id?: number; description?: string } | null };
+
+function CodeRunnerView() {
+  const [languages, setLanguages] = useState<RunnerLanguage[]>([]);
+  const [languageId, setLanguageId] = useState<number | null>(null);
+  const [code, setCode] = useState('print("Hello, world!")');
+  const [stdin, setStdin] = useState("");
+  const [result, setResult] = useState<RunnerResult | null>(null);
+  const [message, setMessage] = useState("Loading supported languages…");
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/execute")
+      .then(async (response) => response.ok ? response.json() as Promise<RunnerLanguage[]> : Promise.reject())
+      .then((items) => {
+        setLanguages(items);
+        const python = items.find((item) => item.name.toLowerCase().startsWith("python"));
+        setLanguageId(python?.id ?? items[0]?.id ?? null);
+        setMessage(items.length ? "Write code, add optional input, then run it." : "No languages are available right now.");
+      })
+      .catch(() => setMessage("The code runner is unavailable. Try again shortly."));
+  }, []);
+
+  const run = async () => {
+    if (!languageId || !code.trim()) {
+      setMessage("Choose a language and write code before running it.");
+      return;
+    }
+    setRunning(true);
+    setResult(null);
+    setMessage("Running your program safely…");
+    try {
+      const response = await fetch("/api/execute", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ languageId, sourceCode: code, stdin }) });
+      const data = await response.json() as RunnerResult & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Unable to run this program.");
+      setResult(data);
+      setMessage(data.status?.description ?? "Run complete.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to run this program.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return <section className="workspace-view runner-view">
+    <div className="runner-heading"><div><span className="eyebrow">CODE RUNNER</span><h1>Write. Run. Improve.</h1><p>A HackerRank-style workspace for every language your runner supports.</p></div><label><span>Language</span><select value={languageId ?? ""} onChange={(event) => setLanguageId(Number(event.target.value))} disabled={!languages.length}>{languages.map((language) => <option key={language.id} value={language.id}>{language.name}</option>)}</select></label></div>
+    <div className="runner-grid">
+      <article className="runner-editor card"><div className="runner-panel-head"><b>Solution</b><span>{languages.find((language) => language.id === languageId)?.name ?? "Loading…"}</span></div><textarea aria-label="Code editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck="false" /><div className="runner-actions"><button type="button" className="button button--primary" onClick={() => void run()} disabled={running || !languages.length}>{running ? "Running…" : "▷ Run code"}</button><span>Code runs in a sandboxed service</span></div></article>
+      <aside className="runner-side"><article className="card runner-input"><div className="runner-panel-head"><b>Custom input</b><span>Optional</span></div><textarea aria-label="Program input" value={stdin} onChange={(event) => setStdin(event.target.value)} placeholder="Input for your program" spellCheck="false" /></article><article className={result?.stderr || result?.compileOutput || result?.message ? "card runner-output runner-output--error" : "card runner-output"}><div className="runner-panel-head"><b>Output</b><span>{message}</span></div>{result ? <><pre>{result.stdout || "(no output)"}</pre>{(result.compileOutput || result.stderr || result.message) && <pre className="runner-error">{result.compileOutput || result.stderr || result.message}</pre>}{(result.time || result.memory !== null) && <small>{result.time ? `${result.time}s` : ""}{result.time && result.memory !== null ? " · " : ""}{result.memory !== null ? `${result.memory} KB` : ""}</small>}</> : <pre className="runner-empty">Your program output will appear here.</pre>}</article></aside>
+    </div>
+  </section>;
+}
+
 function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string) => void }) {
   const [selected, setSelected] = useState("Two Sum");
   const [topicFilter, setTopicFilter] = useState("All topics");
@@ -592,7 +672,7 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
   const showNotice = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(""), 3600); };
   const navigate = (nextView: View) => { setView(nextView); setPanel(null); };
   const openPractice = () => { navigate("practice"); showNotice("Today's quest is ready. Answer the first question to earn XP."); };
-  const subtitle = useMemo(() => ({ dashboard: "YOUR PERSONAL LEARNING SPACE", learn: "LEARNING HUB", practice: "PRACTICE ARENA", challenges: "CHALLENGE ZONE", leaderboard: "COMPETE & CELEBRATE" }[view]), [view]);
+  const subtitle = useMemo(() => ({ dashboard: "YOUR PERSONAL LEARNING SPACE", learn: "LEARNING HUB", practice: "PRACTICE ARENA", challenges: "CHALLENGE ZONE", compiler: "CODE EXECUTION", leaderboard: "COMPETE & CELEBRATE" }[view]), [view]);
   const awardXp = (amount: number, message: string) => { setXp((current) => current + amount); if (celebrations) showNotice(message); };
   const goPractice = () => { setView("practice"); setNotice("Today’s quest is ready. Answer the first question to earn XP."); window.setTimeout(() => setNotice(""), 3600); };
 
@@ -605,7 +685,7 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
     </aside>
     <section className="main-area">
       <header className="topbar"><div className="mobile-brand"><span>⌘</span> codequest</div><div className="topbar-spacer" /><button className="top-stat top-stat--flame" onClick={goPractice}><span>♨</span><b>5</b></button><button className="top-stat top-stat--xp" onClick={() => setView("leaderboard")}><span>✦</span><b>{xp.toLocaleString()} XP</b></button><AccountAccess account={account} onAccountChange={handleAccountChange} onViewProfile={() => setView("leaderboard")} /></header>
-      <div className="page-content">{view === "dashboard" && <HomeView onNavigate={navigate} xp={xp} onPractice={openPractice} onOpenQuest={() => setPanel("quest")} />}{view === "learn" && <LearnView initialStage={initialLearnStage} initialTopicId={initialTopicId} />}{view === "practice" && <PracticeView onComplete={() => awardXp(40, "Quest complete! +40 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={(amount, title) => awardXp(amount, `${title} submitted! +${amount} XP added to your quest.`)} />}{view === "leaderboard" && <LeaderboardView onFindChallenge={() => navigate("challenges")} />}</div>
+      <div className="page-content">{view === "dashboard" && <HomeView onNavigate={navigate} xp={xp} onPractice={openPractice} onOpenQuest={() => setPanel("quest")} />}{view === "learn" && <LearnView initialStage={initialLearnStage} initialTopicId={initialTopicId} />}{view === "practice" && <PracticeView onComplete={() => awardXp(40, "Quest complete! +40 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={(amount, title) => awardXp(amount, `${title} submitted! +${amount} XP added to your quest.`)} />}{view === "compiler" && <CodeRunnerView />}{view === "leaderboard" && <LeaderboardView onFindChallenge={() => navigate("challenges")} />}</div>
     </section>
     <nav aria-label="Mobile navigation" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border border-white/10 bg-quest-surface/95 p-1 shadow-2xl shadow-black/40 backdrop-blur">
       {navItems.map((item) => <button key={item.id} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition ${view === item.id ? "bg-quest-purple/20 text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}><span className="text-base leading-none">{item.icon}</span><span className="truncate">{item.label}</span></button>)}
