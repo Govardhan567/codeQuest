@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountAccess, type CodeQuestAccount } from "@/app/account-access";
 import { runPythonInBrowser } from "@/lib/browser-python-runner";
 import { learnLanguages, pythonTopics, type PythonTopic } from "@/lib/learn-content";
@@ -564,6 +564,9 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
   const [panel, setPanel] = useState<Panel>(null);
   const [dailyReminders, setDailyReminders] = useState(true);
   const [celebrations, setCelebrations] = useState(true);
+  const handleAccountChange = useCallback((nextAccount: CodeQuestAccount | null) => {
+    setAccount(nextAccount);
+  }, []);
   const showNotice = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(""), 3600); };
   const navigate = (nextView: View) => { setView(nextView); setPanel(null); };
   const openPractice = () => { navigate("practice"); showNotice("Today's quest is ready. Answer the first question to earn XP."); };
@@ -579,7 +582,7 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
       <div className="sidebar-bottom"><button type="button" className="nav-link" onClick={() => setPanel("help")}><span>?</span>Help center</button><button type="button" className="nav-link" onClick={() => setPanel("settings")}><span>⚙</span>Settings</button>{dailyReminders && <div className="sidebar-promo"><span>✦</span><b>Build your habit</b><p>Study 10 minutes today to protect your streak.</p><button type="button" onClick={openPractice}>Start a session →</button></div>}</div>
     </aside>
     <section className="main-area">
-      <header className="topbar"><div className="mobile-brand"><span>⌘</span> codequest</div><div className="topbar-spacer" /><button className="top-stat top-stat--flame" onClick={goPractice}><span>♨</span><b>5</b></button><button className="top-stat top-stat--xp" onClick={() => setView("leaderboard")}><span>✦</span><b>{xp.toLocaleString()} XP</b></button><AccountAccess account={account} onAccountChange={setAccount} onViewProfile={() => setView("leaderboard")} /></header>
+      <header className="topbar"><div className="mobile-brand"><span>⌘</span> codequest</div><div className="topbar-spacer" /><button className="top-stat top-stat--flame" onClick={goPractice}><span>♨</span><b>5</b></button><button className="top-stat top-stat--xp" onClick={() => setView("leaderboard")}><span>✦</span><b>{xp.toLocaleString()} XP</b></button><AccountAccess account={account} onAccountChange={handleAccountChange} onViewProfile={() => setView("leaderboard")} /></header>
       <div className="page-content">{view === "dashboard" && <HomeView onNavigate={navigate} xp={xp} onPractice={openPractice} onOpenQuest={() => setPanel("quest")} />}{view === "learn" && <LearnView initialStage={initialLearnStage} initialTopicId={initialTopicId} />}{view === "practice" && <PracticeView onComplete={() => awardXp(40, "Quest complete! +40 XP added to your quest.")} />}{view === "challenges" && <ChallengesView onGainXp={(amount, title) => awardXp(amount, `${title} submitted! +${amount} XP added to your quest.`)} />}{view === "leaderboard" && <LeaderboardView onFindChallenge={() => navigate("challenges")} />}</div>
     </section>
     <nav aria-label="Mobile navigation" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border border-white/10 bg-quest-surface/95 p-1 shadow-2xl shadow-black/40 backdrop-blur">
