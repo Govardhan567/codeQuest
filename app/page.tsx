@@ -137,6 +137,8 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState(initialTopicId);
   const [code, setCode] = useState("");
+  const [useCustomInput, setUseCustomInput] = useState(false);
+  const [customInput, setCustomInput] = useState("");
   const [consoleState, setConsoleState] = useState<ConsoleState>({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
   const [checkState, setCheckState] = useState<{ passed?: boolean; actual?: string; expected?: string; message?: string }>({});
 
@@ -175,6 +177,8 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
     if (statusFor(topic) === "locked") return;
     setSelectedTopicId(topic.id);
     setCode("");
+    setUseCustomInput(false);
+    setCustomInput("");
     setConsoleState({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
     setCheckState({});
     setStage("lesson");
@@ -236,22 +240,28 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
 
     setConsoleState({ kind: "running", stdout: "", stderr: "", label: "Starting Python…" });
     try {
-      const result = await runPythonInBrowser(code, selectedTopic.taskInput ?? "");
+      const result = await runPythonInBrowser(code, useCustomInput ? customInput : selectedTopic.taskInput ?? "");
       const actualOutput = normalizeTaskOutput(result.stdout);
       const expectedOutput = normalizeTaskOutput(selectedTopic.expectedOutput);
-      const passed = result.exitCode === 0 && actualOutput === expectedOutput;
+      const passed = !useCustomInput && result.exitCode === 0 && actualOutput === expectedOutput;
       const guidance = result.stderr || (passed
         ? ""
+        : useCustomInput && result.exitCode === 0
+          ? "Custom input run completed. Submit code to check the lesson test cases."
         : `Your output does not match the task yet. Expected: ${expectedOutput || "(no output)"}. Check the task wording and try one small change.`);
       setConsoleState({
-        kind: passed ? "success" : "error",
+        kind: passed || (useCustomInput && result.exitCode === 0) ? "success" : "error",
         stdout: result.stdout,
         stderr: guidance,
-        label: passed ? "Finished" : result.exitCode === 0 ? "Needs changes" : "Finished with an error",
+        label: passed ? "Finished" : useCustomInput && result.exitCode === 0 ? "Custom run complete" : result.exitCode === 0 ? "Needs changes" : "Finished with an error",
         runPassed: result.exitCode === 0,
         outputPassed: passed,
       });
-      checkExecutionLocally(result, false);
+      if (useCustomInput) {
+        setCheckState({ message: "Custom input run completed. Use Submit Code to evaluate the lesson test cases." });
+      } else {
+        checkExecutionLocally(result, false);
+      }
     } catch (error) {
       setConsoleState({ kind: "error", stdout: "", stderr: error instanceof Error ? error.message : "Unable to run that code.", label: "Python unavailable", runPassed: false, outputPassed: false });
       setCheckState({ message: error instanceof Error ? error.message : "Unable to run that code." });
@@ -259,9 +269,24 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   };
 
   const checkTask = async () => {
+    if (!code.trim()) {
+      await runCode();
+      return;
+    }
     setCheckState({ message: "Checking your solution…" });
     try {
       const execution = await runPythonInBrowser(code, selectedTopic.taskInput ?? "");
+      const actualOutput = normalizeTaskOutput(execution.stdout);
+      const expectedOutput = normalizeTaskOutput(selectedTopic.expectedOutput);
+      const passed = execution.exitCode === 0 && actualOutput === expectedOutput;
+      setConsoleState({
+        kind: passed ? "success" : "error",
+        stdout: execution.stdout,
+        stderr: execution.stderr || (passed ? "" : `Expected: ${expectedOutput || "(no output)"}. Review the task, then update your code.`),
+        label: passed ? "Finished" : execution.exitCode === 0 ? "Needs changes" : "Finished with an error",
+        runPassed: execution.exitCode === 0,
+        outputPassed: passed,
+      });
       if (!checkExecutionLocally(execution, true)) return;
 
       const response = await fetch(`/api/learn/python/topics/${selectedTopic.id}/check`, {
@@ -353,6 +378,12 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
       <article className="lesson-code card">
         <div className="lesson-code__head"><span className="lesson-panel-label">02 · Try it</span><span>main.py</span></div>
         <CodeEditor height="300px" defaultLanguage="python" language="python" value={code} onChange={(value) => setCode(value ?? "")} theme="vs-dark" options={{ minimap: { enabled: false }, fontSize: 14, lineNumbers: "on", scrollBeyondLastLine: false, padding: { top: 14, bottom: 14 }, automaticLayout: true }} />
+        <div className="lesson-runner-controls">
+          <div className="lesson-runner-controls__tools"><button type="button" onClick={() => setCode(selectedTopic.starterCode)}>Load starter code</button><span>Python 3</span></div>
+          <label className="lesson-custom-toggle"><input type="checkbox" checked={useCustomInput} onChange={(event) => setUseCustomInput(event.target.checked)} /> Test against custom input</label>
+          {useCustomInput && <textarea className="lesson-custom-input" aria-label="Custom program input" value={customInput} onChange={(event) => setCustomInput(event.target.value)} placeholder="Type the input your program should receive" />}
+          <div className="lesson-run-actions"><button className="lesson-run lesson-run--secondary" onClick={runCode} disabled={consoleState.kind === "running"}>{consoleState.kind === "running" ? "Running…" : "▷ Run Code"}</button><button className="lesson-run lesson-run--submit" onClick={() => void checkTask()} disabled={consoleState.kind === "running"}>Submit Code</button></div>
+        </div>
         <div className="lesson-runbar"><button className="lesson-run" onClick={runCode} disabled={consoleState.kind === "running"}>{consoleState.kind === "running" ? "Running…" : "▷ Run code"}</button><span>Runs privately in your browser</span></div>
         <div className={`lesson-console lesson-console--${consoleState.kind}`} role="status" aria-live="polite"><div><b>Output</b><span>{consoleState.label}</span></div>{consoleState.stdout && <pre>{consoleState.stdout}</pre>}{consoleState.stderr && <pre className="lesson-console__error">{consoleState.stderr}</pre>}{!consoleState.stdout && !consoleState.stderr && <pre className="lesson-console__empty">{consoleState.label}</pre>}</div>
       </article>
