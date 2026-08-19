@@ -1,0 +1,27 @@
+
+> site-creator-vinext-starter@0.1.0 dev
+> vinext dev --host 0.0.0.0
+
+
+  vinext dev  (Vite 8.0.13)
+
+[2m12:54:43 pm[22m [36m[1m[vite][22m[39m [34m[2m(rsc)[22m[39m Re-optimizing dependencies because vite config has changed
+[2m12:54:43 pm[22m [36m[1m[vite][22m[39m [34m[2m(ssr)[22m[39m Re-optimizing dependencies because vite config has changed
+Using secrets defined in .env
+Using secrets defined in .env.local
+[2m12:54:48 pm[22m [36m[1m[vite][22m[39m [34m[2m(ssr)[22m[39m [optimizer] bundling dependencies...
+[2m12:54:49 pm[22m [36m[1m[vite][22m[39m [34m[2m(rsc)[22m[39m [optimizer] bundling dependencies...
+[2m12:54:53 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+  [32m➜[39m  [1mDebug[22m:   [2m[33mhttp://localhost:[1m3000[22m[2m/__debug[39m[22m
+ GET / 200 in 1.4s (compile: 1786433080.2s, render: 1.3s)
+ GET /api/learn/python/topics 200 in 2.8s
+ GET /learn/python?_rsc=KsQaSH2L7Z4e6Q5N 200 in 32ms (compile: 1786433080.1s, render: 0ms)
+ GET / 200 in 141ms (compile: 1786433080.2s, render: 31ms)
+ GET / 200 in 42ms (compile: 1786433080.1s, render: 24ms)
+ GET / 200 in 47ms (compile: 1786433080.1s, render: 24ms)
+ GET / 200 in 118ms (compile: 1786433080.2s, render: 43ms)
+ GET / 200 in 171ms (compile: 1786433080.2s, render: 100ms)
+ GET /api/learn/python/topics 200 in 1.6s
+ GET /api/learn/python/topics 200 in 1.2s
+ GET /learn/python?_rsc=KsQaSH2L7Z4e6Q5N 200 in 90ms (compile: 1786433080.2s, render: 0ms)

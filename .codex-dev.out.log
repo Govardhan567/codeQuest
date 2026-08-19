@@ -1,0 +1,19 @@
+
+> site-creator-vinext-starter@0.1.0 dev
+> vinext dev --host 127.0.0.1
+
+
+  vinext dev  (Vite 8.0.13)
+
+Using secrets defined in .env
+Using secrets defined in .env.local
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+  [32m➜[39m  [1mDebug[22m:   [2m[33mhttp://localhost:[1m3000[22m[2m/__debug[39m[22m
+ GET / 200 in 1.4s (compile: 1785740062.4s, render: 1.3s)
+ GET /api/learn/python/topics 200 in 2.8s
+ GET /learn/python?_rsc=KsQaSH2L7Z4e6Q5N 200 in 28ms (compile: 1785740062.4s, render: 0ms)
+ GET / 200 in 107ms (compile: 1785740062.4s, render: 61ms)
+ GET /learn/python?_rsc=KsQaSH2L7Z4e6Q5N 200 in 93ms (compile: 1785740062.4s, render: 0ms)
+ GET /api/learn/python/topics 200 in 1.3s
+ POST /api/learn/python/topics/2/check 401 in 849ms
+ GET /?_rsc 200 in 52ms (compile: 1785740062.4s, render: 0ms)
