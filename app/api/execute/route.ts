@@ -4,6 +4,23 @@ const runnerUrl = (process.env.CODE_RUNNER_URL ?? "https://ce.judge0.com").repla
 const runnerToken = process.env.CODE_RUNNER_TOKEN;
 const maxSourceLength = 100_000;
 const maxInputLength = 20_000;
+const runnerRequestTimeoutMs = 20_000;
+
+// These limits are passed to Judge0 for every submission.  They keep user
+// programs isolated from the application and prevent a single run from
+// consuming excessive runner resources.  The runner must be a Judge0
+// instance configured to honor sandbox limits.
+const sandboxLimits = {
+  cpu_time_limit: 3,
+  cpu_extra_time: 1,
+  wall_time_limit: 5,
+  memory_limit: 128_000,
+  stack_limit: 32_000,
+  max_processes_and_or_threads: 16,
+  max_file_size: 1_024,
+  enable_network: false,
+  redirect_stderr_to_stdout: false,
+};
 
 function runnerHeaders() {
   return {
@@ -13,11 +30,18 @@ function runnerHeaders() {
 }
 
 async function runnerFetch(path: string, init?: RequestInit) {
-  return fetch(`${runnerUrl}${path}`, {
-    ...init,
-    headers: { ...runnerHeaders(), ...init?.headers },
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), runnerRequestTimeoutMs);
+  try {
+    return await fetch(`${runnerUrl}${path}`, {
+      ...init,
+      headers: { ...runnerHeaders(), ...init?.headers },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function GET() {
@@ -45,9 +69,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Your code or input is too large to run." }, { status: 413 });
     }
 
-    const submissionResponse = await runnerFetch("/submissions?base64_encoded=false&wait=true", {
+    const submissionResponse = await runnerFetch("/submissions?base64_encoded=false&wait=false", {
       method: "POST",
-      body: JSON.stringify({ source_code: sourceCode, language_id: languageId, stdin }),
+      body: JSON.stringify({
+        source_code: sourceCode,
+        language_id: languageId,
+        stdin,
+        ...sandboxLimits,
+      }),
     });
     let submission = await submissionResponse.json() as Record<string, unknown>;
     if (!submissionResponse.ok) {

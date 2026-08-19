@@ -219,7 +219,7 @@ nav { display: grid; gap: 4px; }
 .lesson-run--secondary { border: 1px solid #67607c; background: transparent; color: #f2eef8; }
 .lesson-run--submit { background: linear-gradient(135deg, #1aa554, #0d813d); }
 .lesson-runbar { min-height: 53px; display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 9px 14px; border-top: 1px solid #37334a; background: #211e32; }
-.lesson-code > .lesson-runbar, .lesson-task > .lesson-check { display: none; }
+.lesson-code > .lesson-runbar { display: none; }
 .lesson-runbar > span { color: #8e87a1; font-size: 9px; }
 .lesson-run, .lesson-check { border: 0; border-radius: 8px; background: linear-gradient(135deg, #9687f9, #7465df); color: white; cursor: pointer; padding: 9px 13px; font-size: 10px; font-weight: 850; }
 .lesson-run:disabled { cursor: wait; opacity: .7; }

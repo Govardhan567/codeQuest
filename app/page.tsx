@@ -23,8 +23,6 @@ const navItems: { id: View; label: string; icon: string }[] = [
   { id: "leaderboard", label: "Leaderboard", icon: "♕" },
 ];
 
-navItems.splice(4, 0, { id: "compiler", label: "Code runner", icon: "Run" });
-
 const languages = [
   { name: "Python", icon: "⌘", lessons: "8 / 24 lessons", percent: 34, color: "#f5c451" },
   { name: "JavaScript", icon: "JS", lessons: "4 / 30 lessons", percent: 15, color: "#f1d56b" },
@@ -136,7 +134,11 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const [stage, setStage] = useState<LearnStage>(initialStage);
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState(initialTopicId);
-  const [code, setCode] = useState("");
+  // Each lesson opens with a working example, so learners can run and edit it
+  // immediately instead of starting from an empty editor.
+  const [code, setCode] = useState(() =>
+    pythonTopics.find((topic) => topic.id === initialTopicId)?.starterCode ?? "",
+  );
   const [useCustomInput, setUseCustomInput] = useState(false);
   const [customInput, setCustomInput] = useState("");
   const [consoleState, setConsoleState] = useState<ConsoleState>({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
@@ -176,7 +178,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const openTopic = (topic: PythonTopic) => {
     if (statusFor(topic) === "locked") return;
     setSelectedTopicId(topic.id);
-    setCode("");
+    setCode(topic.starterCode);
     setUseCustomInput(false);
     setCustomInput("");
     setConsoleState({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });

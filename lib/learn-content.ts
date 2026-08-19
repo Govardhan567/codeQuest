@@ -182,6 +182,7 @@ export const pythonTopics: PythonTopic[] = [
     title: "Basic Input/Output",
     description: "Receive text from a person and show a useful response.",
     explanation: [
+      "A program accepts input, processes it, and produces output.",
       "input() pauses a program and waits for a person to type something. The value that comes back is text, even when it looks like a number.",
       "For this check, CodeQuest supplies the sample input Ada. Your program should use it to make a formatted welcome message.",
     ],
