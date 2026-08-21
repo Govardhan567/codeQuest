@@ -1,15 +1,38 @@
 "use client";
-import { FormEvent, MouseEvent, useEffect, useRef, useState } from "react";
 
-type Mode = "login" | "register" | "success";
-const code = ["{ }", "</>", "01", "101", "#", "const", "function", "=>", "git", "async"];
-function Input({ name, label, type = "text" }: {name:string;label:string;type?:string}) { return <label className="field">{label}<input name={name} type={type} required placeholder={type === "password" ? "••••••••" : "you@workspace.dev"} autoComplete={type === "password" ? "current-password" : "email"}/></label>; }
+import { MouseEvent, useState } from "react";
 
-export default function LoginPage() {
- const [mode,setMode]=useState<Mode>("login"), [loading,setLoading]=useState(false), [notice,setNotice]=useState(""), [ripple,setRipple]=useState<{x:number;y:number;t:string}|null>(null); const ref=useRef<HTMLElement>(null);
- useEffect(()=>{const f=(e:PointerEvent)=>{ref.current?.style.setProperty("--x",`${e.clientX/window.innerWidth-.5}`);ref.current?.style.setProperty("--y",`${e.clientY/window.innerHeight-.5}`)};addEventListener("pointermove",f);return()=>removeEventListener("pointermove",f)},[]);
- const pulse=(e:MouseEvent<HTMLButtonElement>,t:string)=>{const r=e.currentTarget.getBoundingClientRect();setRipple({x:e.clientX-r.left,y:e.clientY-r.top,t});setTimeout(()=>setRipple(null),650)};
- const submit=(e:FormEvent)=>{e.preventDefault();setLoading(true);setNotice(mode==="register"?"Creating your developer workspace…":"Authenticating your coding workspace…");setTimeout(()=>{setLoading(false);setMode("success");setNotice("Access granted. Your workspace is ready.")},1450)};
- return <main ref={ref} className={`shell ${loading?"loading":""} ${mode==="register"?"register":""}`}><div className="grid"/><div className="scan"/><div className="glow"/><div className="orb a"/><div className="orb b"/><div className="fragments" aria-hidden>{code.map((c,i)=><i key={c} style={{"--i":i} as React.CSSProperties}>{c}</i>)}</div><div className="core" aria-hidden><i/><i/><i/><b>&lt;/&gt;</b></div>
- <section className={`card ${mode==="success"?"success":""}`} aria-labelledby="title">{mode==="success"?<div className="success-body" role="status"><strong>✓</strong><span>ACCESS GRANTED</span><h1 id="title">Login Successful</h1><p>Your developer environment is synced and ready.</p><button onClick={()=>setMode("login")}>Return to sign in <b>→</b></button></div>:<><header><b>&lt;/&gt;</b><strong>CODEX</strong><em>developer cloud</em></header><div className="intro"><span>{mode==="login"?"SECURE SESSION":"JOIN THE NETWORK"}</span><h1 id="title">{mode==="login"?"Welcome Back, Coder":"Create your account"}</h1><p>{mode==="login"?"Build. Code. Create.":"Start building from the edge of possibility."}</p></div><form onSubmit={submit}>{mode==="register"&&<Input name="name" label="Your name"/>}<Input name="email" label="Email or username"/><Input name="password" label="Password" type="password"/>{mode==="register"&&<Input name="confirm" label="Confirm password" type="password"/>}{mode==="login"&&<div className="options"><label><input type="checkbox"/> Remember me</label><button type="button" className="link">Forgot password?</button></div>}<div className="actions"><button type="button" className="secondary" onClick={e=>{pulse(e,"p");setMode(mode==="login"?"register":"login")}}>{mode==="login"?"Register":"Back to Login"}{ripple?.t==="p"&&<i className="ripple purple" style={{left:ripple.x,top:ripple.y}}/>}</button><button className="primary" onClick={e=>pulse(e,"c")} disabled={loading}>{loading?<><i className="loader">{`{ }`}</i> Connecting</>:mode==="login"?"Login":"Create Account"}{ripple?.t==="c"&&<i className="ripple cyan" style={{left:ripple.x,top:ripple.y}}/>}</button></div></form><footer>Protected by end-to-end encryption <b>•</b> SOC 2 ready</footer></>}</section><small className="status"><i/> SYSTEM ONLINE <b>•</b> v2.4.0</small><p className="sr" aria-live="polite">{notice}</p></main>;
+export default function CodexLaunch() {
+  const [action, setAction] = useState<"" | "login" | "register">("");
+  const [ripple, setRipple] = useState<{ x: number; y: number } | null>(null);
+  const begin = (kind: "login" | "register", event: MouseEvent<HTMLButtonElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    setRipple({ x: event.clientX - box.left, y: event.clientY - box.top });
+    setAction(kind);
+    window.setTimeout(() => setAction(""), 1250);
+  };
+  return <main className={`launch ${action ? `is-${action}` : ""}`}>
+    <div className="stars" aria-hidden="true" />
+    <div className="ambient" aria-hidden="true" />
+    <section className="hero" aria-labelledby="launch-title">
+      <p className="overline">THE AGENTIC CODING WORKSPACE</p>
+      <h1 id="launch-title">Build the<br /><em>impossible.</em></h1>
+      <p className="lede">A new kind of coding environment, where your ideas<br className="desktop" /> move at the speed of thought.</p>
+      <div className="actions">
+        <button className="register" onClick={(event) => begin("register", event)}>Register <span>↗</span>{action === "register" && ripple && <i className="ripple" style={{ left: ripple.x, top: ripple.y }} />}</button>
+        <button className="login" onClick={(event) => begin("login", event)}>Login <span>⟶</span>{action === "login" && ripple && <i className="ripple" style={{ left: ripple.x, top: ripple.y }} />}</button>
+      </div>
+      <p className="fine">No credit card required <b>·</b> Your first build starts free</p>
+    </section>
+    <div className="object-space" aria-hidden="true">
+      <div className="ai-chip">AI</div>
+      <div className="idea-card"><b>✦</b><strong>What will you<br />make today?</strong><span>↗</span></div>
+      <div className="orbit" />
+      <div className="editor">
+        <header><span><i /><i /><i /></span><b>dream.ts</b><em>⌘K</em></header>
+        <pre><small>1</small><code><b>import</b> &#123; imagination &#125; <b>from</b> <i>&apos;codex&apos;</i>;</code><small>2</small><code /> <small>3</small><code><b>const</b> future = <b>await</b> imagination.</code><small>4</small><code>  <strong>create</strong>(&#123;</code><small>5</small><code>    with: <i>&apos;a little wonder&apos;</i>,</code><small>6</small><code>    limit: <em>Infinity</em></code><small>7</small><code>  &#125;);<mark /></code></pre>
+      </div>
+    </div>
+    <p className="sr" aria-live="polite">{action ? `${action === "login" ? "Login" : "Registration"} experience starting` : ""}</p>
+  </main>;
 }
