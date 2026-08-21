@@ -134,11 +134,8 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const [stage, setStage] = useState<LearnStage>(initialStage);
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState(initialTopicId);
-  // Each lesson opens with a working example, so learners can run and edit it
-  // immediately instead of starting from an empty editor.
-  const [code, setCode] = useState(() =>
-    pythonTopics.find((topic) => topic.id === initialTopicId)?.starterCode ?? "",
-  );
+  // Learners write the solution themselves; the required output remains visible in the task.
+  const [code, setCode] = useState("");
   const [useCustomInput, setUseCustomInput] = useState(false);
   const [customInput, setCustomInput] = useState("");
   const [consoleState, setConsoleState] = useState<ConsoleState>({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
@@ -178,7 +175,7 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   const openTopic = (topic: PythonTopic) => {
     if (statusFor(topic) === "locked") return;
     setSelectedTopicId(topic.id);
-    setCode(topic.starterCode);
+    setCode("");
     setUseCustomInput(false);
     setCustomInput("");
     setConsoleState({ kind: "idle", stdout: "", stderr: "", label: "Run code to see its output here." });
@@ -376,12 +373,18 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
         <span className="lesson-panel-label">01 · Understand it</span>
         {selectedTopic.explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
         <div className="lesson-example"><div><b>Example</b><span>Read only</span></div><CodeEditor height="142px" defaultLanguage="python" language="python" value={selectedTopic.exampleCode} theme="vs-dark" options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, lineNumbers: "on", scrollBeyondLastLine: false, folding: false, padding: { top: 12, bottom: 12 } }} /></div>
+        <section className="lesson-understand-problem" aria-labelledby="understand-problem-title">
+          <span>Problem to solve</span>
+          <h2 id="understand-problem-title">{selectedTopic.taskTitle}</h2>
+          <p>{selectedTopic.taskDescription}</p>
+          <small>Expected output: <code>{selectedTopic.expectedOutput}</code></small>
+        </section>
       </article>
       <article className="lesson-code card">
         <div className="lesson-code__head"><span className="lesson-panel-label">02 · Try it</span><span>main.py</span></div>
         <CodeEditor height="480px" defaultLanguage="python" language="python" value={code} onChange={(value) => setCode(value ?? "")} theme="vs-dark" options={{ minimap: { enabled: false }, fontSize: 14, lineNumbers: "on", scrollBeyondLastLine: false, folding: false, padding: { top: 14, bottom: 14 }, automaticLayout: true }} />
         <div className="lesson-runner-controls">
-          <div className="lesson-runner-controls__tools"><button type="button" onClick={() => setCode(selectedTopic.starterCode)}>Load starter code</button><span>Python 3</span></div>
+          <div className="lesson-runner-controls__tools"><button type="button" onClick={() => setCode("")}>Clear editor</button><span>Python 3</span></div>
           <label className="lesson-custom-toggle"><input type="checkbox" checked={useCustomInput} onChange={(event) => setUseCustomInput(event.target.checked)} /> Test against custom input</label>
           {useCustomInput && <textarea className="lesson-custom-input" aria-label="Custom program input" value={customInput} onChange={(event) => setCustomInput(event.target.value)} placeholder="Type the input your program should receive" />}
           <div className="lesson-run-actions"><button className="lesson-run lesson-run--secondary" onClick={runCode} disabled={consoleState.kind === "running"}>{consoleState.kind === "running" ? "Running…" : "▷ Run Code"}</button><button className="lesson-run lesson-run--submit" onClick={() => void checkTask()} disabled={consoleState.kind === "running"}>Submit Code</button></div>
