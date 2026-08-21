@@ -418,12 +418,68 @@ function LearnView({ initialStage = "languages", initialTopicId = 1 }: { initial
   </section>;
 }
 
+const starterPracticeQuestions = [
+  { level: "Basic", prompt: "What does this expression return?", code: "7 + 5", answer: "12", explanation: "Correct. Python adds the two integers.", next: "Repeat a short string." },
+  { level: "Basic", prompt: "What does this expression return?", code: '"py" * 3', answer: "pypypy", explanation: "Exactly. Multiplying a string repeats it.", next: "Count characters in a word." },
+  { level: "Basic", prompt: "What does this expression return?", code: 'len("quest")', answer: "5", explanation: "Right. quest has five characters.", next: "Read the first item in a list." },
+  { level: "Basic", prompt: "What does this expression return?", code: "[4, 5, 6][0]", answer: "4", explanation: "Correct. Python list indexes begin at 0.", next: "Find a remainder." },
+  { level: "Basic", prompt: "What does this expression return?", code: "10 % 4", answer: "2", explanation: "Nice. % gives the remainder after division.", next: "Add values in a list." },
+  { level: "Intermediate", prompt: "What does this expression return?", code: "sum([2, 4, 6])", answer: "12", explanation: "Correct. sum() adds every item in the list.", next: "Use range() with a step." },
+  { level: "Intermediate", prompt: "What does this expression return?", code: "list(range(2, 7, 2))", answer: "[2, 4, 6]", explanation: "Exactly. range stops before 7 and moves by 2.", next: "Check a palindrome." },
+  { level: "Intermediate", prompt: "What does this expression return?", code: '"level" == "level"[::-1]', answer: "true", explanation: "Right. level is the same when reversed.", next: "Read a dictionary value." },
+  { level: "Intermediate", prompt: "What does this expression return?", code: '{"score": 95}["score"]', answer: "95", explanation: "Correct. A dictionary retrieves a value by its key.", next: "Filter the even values." },
+  { level: "Intermediate", prompt: "What does this expression return?", code: "[n for n in range(6) if n % 2 == 0]", answer: "[0, 2, 4]", explanation: "Nice. The condition keeps only even numbers.", next: "Call a lambda function." },
+  { level: "Advanced", prompt: "What does this expression return?", code: "(lambda n: n * n)(5)", answer: "25", explanation: "Correct. The lambda squares its input.", next: "Combine filter and sum." },
+  { level: "Advanced", prompt: "What does this expression return?", code: "sum(n for n in range(10) if n % 2 == 0)", answer: "20", explanation: "Exactly. The even values are 0, 2, 4, 6, and 8.", next: "Test whether every value passes a condition." },
+  { level: "Advanced", prompt: "What does this expression return?", code: "all(n > 0 for n in [3, 1, 8])", answer: "true", explanation: "Right. Every value is greater than zero.", next: "Use a nested list comprehension." },
+  { level: "Advanced", prompt: "What does this expression return?", code: "[x * y for x in [1, 2] for y in [3, 4]]", answer: "[3, 4, 6, 8]", explanation: "Correct. The inner loop runs for each value of x.", next: "Find the best score with a lambda." },
+  { level: "Advanced", prompt: "What does this expression return?", code: "max({\"Ada\": 92, \"Mina\": 98}, key=lambda name: {\"Ada\": 92, \"Mina\": 98}[name])", answer: "Mina", explanation: "Excellent. The key lambda selects the name with the largest score.", next: "Finish the practice set." },
+];
+
+const generatedBasicPracticeQuestions = Array.from({ length: 45 }, (_, index) => {
+  const number = index + 6;
+  return {
+    level: "Basic",
+    prompt: `Basic prompt ${index + 6}: What does this expression return?`,
+    code: `${number} * 2 + 1`,
+    answer: String(number * 2 + 1),
+    explanation: "Correct. Multiplication happens before addition.",
+    next: "Try another short arithmetic expression.",
+  };
+});
+
+const generatedIntermediatePracticeQuestions = Array.from({ length: 45 }, (_, index) => {
+  const limit = index + 4;
+  const answer = (limit * (limit + 1)) / 2;
+  return {
+    level: "Intermediate",
+    prompt: `Intermediate prompt ${index + 6}: What does this expression return?`,
+    code: `sum(range(1, ${limit + 1}))`,
+    answer: String(answer),
+    explanation: "Exactly. range creates the values and sum() adds them together.",
+    next: "Practice another loop-based total.",
+  };
+});
+
+const generatedAdvancedPracticeQuestions = Array.from({ length: 45 }, (_, index) => {
+  const number = index + 6;
+  return {
+    level: "Advanced",
+    prompt: `Advanced prompt ${index + 6}: What does this expression return?`,
+    code: `(lambda value: value ** 2 - value)(${number})`,
+    answer: String(number ** 2 - number),
+    explanation: "Correct. The lambda runs immediately and returns its calculated value.",
+    next: "Practice another lambda expression.",
+  };
+});
+
 const practiceQuestions = [
-  { prompt: "What does this expression return?", code: "len([1, 2, 3])", answer: "3", explanation: "Exactly. len() counts the items in a collection.", next: "Calculate a power with the exponent operator." },
-  { prompt: "What does this expression return?", code: "2 ** 3", answer: "8", explanation: "Correct. ** raises a number to a power.", next: "Count the characters in a string." },
-  { prompt: "What does this expression return?", code: "len(\"code\")", answer: "4", explanation: "Right. The word code has four characters.", next: "Use floor division to find a whole-number result." },
-  { prompt: "What does this expression return?", code: "10 // 3", answer: "3", explanation: "Nice. // performs floor division and removes the remainder.", next: "Check the truthiness of an empty list." },
-  { prompt: "What does this expression return?", code: "bool([])", answer: "false", explanation: "Perfect. An empty list is falsy in Python.", next: "Finish the quest and collect your XP." },
+  ...starterPracticeQuestions.filter((question) => question.level === "Basic"),
+  ...generatedBasicPracticeQuestions,
+  ...starterPracticeQuestions.filter((question) => question.level === "Intermediate"),
+  ...generatedIntermediatePracticeQuestions,
+  ...starterPracticeQuestions.filter((question) => question.level === "Advanced"),
+  ...generatedAdvancedPracticeQuestions,
 ];
 
 function PracticeView({ onComplete }: { onComplete: () => void }) {
@@ -463,10 +519,10 @@ function PracticeView({ onComplete }: { onComplete: () => void }) {
 }
 
 const challengeContent: Record<string, { description: string; starterCode: string; testCase: string; expectedOutput: string; hint: string }> = {
-  "Two Sum": { description: "Given an array of integers and a target, return the indices of the two numbers that add up to the target.", starterCode: "def two_sum(nums, target):\n    seen = {}\n    for index, number in enumerate(nums):\n        needed = target - number\n        if needed in seen:\n            return [seen[needed], index]\n        seen[number] = index\n\nprint(two_sum([2, 7, 11, 15], 9))", testCase: "Input: [2, 7, 11, 15], target = 9\nExpected output: [0, 1]", expectedOutput: "[0, 1]", hint: "Use a dictionary to remember each number's index as you scan the list." },
-  "Valid Parentheses": { description: "Check whether every opening bracket has the matching closing bracket in the correct order.", starterCode: "def is_valid(value):\n    pairs = {')': '(', ']': '[', '}': '{'}\n    stack = []\n    for character in value:\n        if character in '([{':\n            stack.append(character)\n        elif not stack or stack.pop() != pairs[character]:\n            return False\n    return not stack\n\nprint(is_valid(\"()[]{}\"))", testCase: "Input: ()[]{}\nExpected output: True", expectedOutput: "True", hint: "A stack lets you match each closing bracket with the most recent opening bracket." },
-  "Longest Substring": { description: "Find the length of the longest substring that contains no repeated characters.", starterCode: "def longest_unique_substring(value):\n    seen = {}\n    start = longest = 0\n    for end, character in enumerate(value):\n        if character in seen and seen[character] >= start:\n            start = seen[character] + 1\n        seen[character] = end\n        longest = max(longest, end - start + 1)\n    return longest\n\nprint(longest_unique_substring(\"abcabcbb\"))", testCase: "Input: abcabcbb\nExpected output: 3", expectedOutput: "3", hint: "Move a sliding-window start pointer past a repeated character instead of rebuilding the substring." },
-  "Merge Intervals": { description: "Merge overlapping ranges into the smallest set of non-overlapping intervals.", starterCode: "def merge_intervals(intervals):\n    intervals.sort(key=lambda interval: interval[0])\n    merged = []\n    for start, end in intervals:\n        if not merged or start > merged[-1][1]:\n            merged.append([start, end])\n        else:\n            merged[-1][1] = max(merged[-1][1], end)\n    return merged\n\nprint(merge_intervals([[1, 3], [2, 6], [8, 10]]))", testCase: "Input: [[1, 3], [2, 6], [8, 10]]\nExpected output: [[1, 6], [8, 10]]", expectedOutput: "[[1, 6], [8, 10]]", hint: "Sort ranges by their first value, then compare each new range with the last merged range." },
+  "Two Sum": { description: "Given an array of integers and a target, return the indices of the two numbers that add up to the target.", starterCode: "def two_sum(nums, target):\n    # Return the indices of the pair that reaches target.\n    pass", testCase: "Input: [2, 7, 11, 15], target = 9\nExpected output: [0, 1]", expectedOutput: "[0, 1]", hint: "Use a dictionary to remember each number's index as you scan the list." },
+  "Valid Parentheses": { description: "Check whether every opening bracket has the matching closing bracket in the correct order.", starterCode: "def is_valid(value):\n    # Return True only when every bracket is correctly matched.\n    pass", testCase: "Input: ()[]{}\nExpected output: True", expectedOutput: "True", hint: "A stack lets you match each closing bracket with the most recent opening bracket." },
+  "Longest Substring": { description: "Find the length of the longest substring that contains no repeated characters.", starterCode: "def longest_unique_substring(value):\n    # Return the length of the longest substring without repeats.\n    pass", testCase: "Input: abcabcbb\nExpected output: 3", expectedOutput: "3", hint: "Move a sliding-window start pointer past a repeated character instead of rebuilding the substring." },
+  "Merge Intervals": { description: "Merge overlapping ranges into the smallest set of non-overlapping intervals.", starterCode: "def merge_intervals(intervals):\n    # Return the merged, non-overlapping intervals.\n    pass", testCase: "Input: [[1, 3], [2, 6], [8, 10]]\nExpected output: [[1, 6], [8, 10]]", expectedOutput: "[[1, 6], [8, 10]]", hint: "Sort ranges by their first value, then compare each new range with the last merged range." },
 };
 
 type ChallengeTestCase = { label: string; call: string; expected: unknown };
@@ -673,6 +729,17 @@ function ChallengesView({ onGainXp }: { onGainXp: (amount: number, title: string
       <article className="editor-card card"><div className="editor-top"><div><span className="eyebrow">{selectedChallenge.difficulty.toUpperCase()} · {selectedChallenge.topic.toUpperCase()}</span><h2>{selected}</h2></div><span className="editor-lang">Python</span></div><p>{details.description}</p><div className="tabs" role="tablist" aria-label="Challenge workspace"><button type="button" role="tab" aria-selected={activeTab === "solution"} className={activeTab === "solution" ? "tab--active" : ""} onClick={() => setActiveTab("solution")}>Solution.py</button><button type="button" role="tab" aria-selected={activeTab === "tests"} className={activeTab === "tests" ? "tab--active" : ""} onClick={() => setActiveTab("tests")}>Test cases</button></div>{activeTab === "solution" ? <textarea className="challenge-editor" aria-label={`${selected} solution`} value={code} onChange={(event) => setCode(event.target.value)} spellCheck="false" /> : <div className="test-cases" role="tabpanel"><b>Sample test</b><pre>{details.testCase}</pre><p>Run the current solution to see its output below.</p></div>}<div className="run-result" role="status" aria-live="polite">{runState}</div><div className="editor-actions"><button className="button button--ghost" type="button" onClick={() => runChallenge()} disabled={isRunning}>{isRunning ? "Running…" : "▷ Run code"}</button><button className="button button--primary" type="button" onClick={() => runChallenge(true)} disabled={isRunning}>{isRunning ? "Checking…" : "Submit solution"}</button></div></article>
       <aside className="hint-panel card"><div className="hint-head"><span className="spark-icon">✦</span><div><b>Quest Guide</b><small>Hint-focused tutor</small></div><i>●</i></div><div className="chat-bubble">{message}</div><div className="hint-steps"><span>1</span><p><b>Try this first</b><br />{details.hint}</p></div><form className="hint-input" onSubmit={(event) => { event.preventDefault(); sendHint(); }}><input aria-label="Ask your tutor for help" value={hintQuestion} onChange={(event) => setHintQuestion(event.target.value)} placeholder="Ask for a hint…" /><button aria-label="Send hint request" type="submit">↑</button></form></aside>
     </div>
+    <section className="challenge-problem-details card" aria-label="Challenge question details">
+      <span className="eyebrow">QUESTION DETAILS</span>
+      <h2>What you need to solve</h2>
+      <p>{details.description}</p>
+      <div className="challenge-problem-details__grid">
+        <div><b>Required function</b><code>{details.starterCode.split("\n")[0]}</code></div>
+        <div><b>Sample input</b><code>{details.testCase.split("\n")[0].replace("Input: ", "")}</code></div>
+        <div><b>Required output</b><code>{details.expectedOutput}</code></div>
+      </div>
+      <small>Return the required value from the function. The automatic tests will call your function with more cases.</small>
+    </section>
     <ChallengeTestSummary testCases={selectedTestCases} results={testResults} />
   </section>;
 }
