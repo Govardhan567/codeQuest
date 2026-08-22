@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountAccess, type CodeQuestAccount } from "@/app/account-access";
+import { createClient, hasSupabaseAuth } from "@/lib/client";
 import { runPythonInBrowser } from "@/lib/browser-python-runner";
 import { learnLanguages, pythonTopics, type PythonTopic } from "@/lib/learn-content";
 
@@ -29,11 +30,70 @@ const languages = [
   { name: "SQL", icon: "▤", lessons: "12 / 18 lessons", percent: 67, color: "#65b9ff" },
 ];
 
-const challenges = [
+const baseChallenges = [
   { title: "Two Sum", topic: "Arrays · Hash Map", difficulty: "Easy", solved: true, xp: 50 },
   { title: "Valid Parentheses", topic: "Stacks", difficulty: "Easy", solved: false, xp: 60 },
   { title: "Longest Substring", topic: "Sliding Window", difficulty: "Medium", solved: false, xp: 100 },
   { title: "Merge Intervals", topic: "Arrays · Sorting", difficulty: "Medium", solved: false, xp: 120 },
+];
+
+type AdvancedChallenge = { title: string; topic: string; functionName: string; description: string; hint: string; call: string; expected: unknown };
+const advancedChallengeSpecs: AdvancedChallenge[] = [
+  ["LRU Cache", "Design · Hash Map", "lru_cache", "Design a least-recently-used cache that returns the final values after a sequence of gets and puts.", "Combine a dictionary with an ordered structure; every read refreshes recency.", "lru_cache(2, [('put', 1, 1), ('put', 2, 2), ('get', 1), ('put', 3, 3), ('get', 2)])", [1, -1]],
+  ["Median of Two Sorted Arrays", "Binary Search", "find_median", "Return the median of two sorted arrays in logarithmic time.", "Binary-search the shorter array's partition.", "find_median([1, 3], [2])", 2],
+  ["Trapping Rain Water", "Two Pointers", "trap_water", "Calculate how much water can be trapped between elevation bars.", "Track the best wall seen from each side and advance the lower side.", "trap_water([0,1,0,2,1,0,1,3,2,1,2,1])", 6],
+  ["Sliding Window Maximum", "Deque · Sliding Window", "max_sliding_window", "Return the maximum value in every window of size k.", "Keep indices in a decreasing deque and discard indices outside the window.", "max_sliding_window([1,3,-1,-3,5,3,6,7], 3)", [3,3,5,5,6,7]],
+  ["Minimum Window Substring", "Sliding Window", "min_window", "Find the smallest substring that contains every character in the target.", "Expand until valid, then contract while keeping the window valid.", "min_window('ADOBECODEBANC', 'ABC')", "BANC"],
+  ["Word Ladder", "Graphs · BFS", "word_ladder", "Return the shortest transformation length between two words.", "BFS level by level; generate one-letter neighbors.", "word_ladder('hit', 'cog', ['hot','dot','dog','lot','log','cog'])", 5],
+  ["Course Schedule II", "Graphs · Topological Sort", "find_course_order", "Return a valid course order from prerequisite pairs.", "Use indegrees and a queue of courses with no prerequisites.", "find_course_order(2, [[1,0]])", [0,1]],
+  ["Serialize Binary Tree", "Trees · DFS", "serialize_tree", "Serialize a level-order tree list, keeping null placeholders needed for structure.", "Use a queue and trim only trailing null values.", "serialize_tree([1,2,3,None,None,4,5])", "1,2,3,#,#,4,5"],
+  ["Lowest Common Ancestor", "Trees · DFS", "lowest_common_ancestor", "Return the lowest shared ancestor value in a binary-search-tree value list.", "Walk down: both targets left, both right, otherwise the current node is the answer.", "lowest_common_ancestor([6,2,8,0,4,7,9,None,None,3,5], 2, 8)", 6],
+  ["Binary Tree Maximum Path", "Trees · Dynamic Programming", "max_path_sum", "Return the largest path sum in a binary tree represented in level order.", "A recursive call returns one usable branch; update a global best with both branches.", "max_path_sum([-10,9,20,None,None,15,7])", 42],
+  ["Decode Ways", "Dynamic Programming", "num_decodings", "Count the valid letter decodings of a digit string.", "At each position, consider one valid digit and one valid two-digit number.", "num_decodings('226')", 3],
+  ["Coin Change", "Dynamic Programming", "coin_change", "Return the fewest coins needed to reach an amount, or -1.", "Build a bottom-up table where each amount tries every coin.", "coin_change([1,2,5], 11)", 3],
+  ["Edit Distance", "Dynamic Programming", "edit_distance", "Find the minimum insertions, deletions, and replacements between two words.", "Use a matrix where each cell comes from its top, left, and diagonal neighbors.", "edit_distance('horse', 'ros')", 3],
+  ["Regular Expression Matching", "Dynamic Programming", "regex_match", "Match a string against a pattern containing . and *.", "Let dp[i][j] represent the first i characters against the first j pattern characters.", "regex_match('aab', 'c*a*b')", true],
+  ["Distinct Subsequences", "Dynamic Programming", "num_distinct", "Count how many subsequences of source equal target.", "When characters match, add the count that uses it and the count that skips it.", "num_distinct('rabbbit', 'rabbit')", 3],
+  ["Longest Increasing Subsequence", "Binary Search · DP", "length_of_lis", "Return the length of the longest strictly increasing subsequence.", "Maintain minimal possible tails and binary-search where each value belongs.", "length_of_lis([10,9,2,5,3,7,101,18])", 4],
+  ["Russian Doll Envelopes", "Sorting · Binary Search", "max_envelopes", "Find the maximum number of envelopes that can nest.", "Sort width ascending and height descending, then solve LIS on heights.", "max_envelopes([[5,4],[6,4],[6,7],[2,3]])", 3],
+  ["Kth Largest Element", "Heap · Quickselect", "kth_largest", "Return the kth largest value without fully sorting when possible.", "A min-heap of size k keeps exactly the candidates you need.", "kth_largest([3,2,1,5,6,4], 2)", 5],
+  ["Merge K Sorted Lists", "Heap · Linked Lists", "merge_k_lists", "Merge sorted lists represented as nested Python lists.", "Push each list head into a heap with its source index.", "merge_k_lists([[1,4,5],[1,3,4],[2,6]])", [1,1,2,3,4,4,5,6]],
+  ["Find Median from Stream", "Heaps", "stream_medians", "Return the median after every number in a stream.", "Balance a max-heap for the lower half and min-heap for the upper half.", "stream_medians([2,1,5,7,2,0,5])", [2,1.5,2,3.5,2,2,2]],
+  ["Largest Rectangle Histogram", "Monotonic Stack", "largest_rectangle", "Return the area of the largest rectangle in a histogram.", "Use a stack of increasing bar indices and append a zero-height sentinel.", "largest_rectangle([2,1,5,6,2,3])", 10],
+  ["Daily Temperatures", "Monotonic Stack", "daily_temperatures", "For each day, return how many days until a warmer temperature.", "Store unresolved indices in a decreasing temperature stack.", "daily_temperatures([73,74,75,71,69,72,76,73])", [1,1,4,2,1,1,0,0]],
+  ["Asteroid Collision", "Stacks", "asteroid_collision", "Resolve collisions among moving asteroids.", "Only a positive asteroid followed by a negative asteroid can collide.", "asteroid_collision([5,10,-5])", [5,10]],
+  ["Clone Graph", "Graphs · DFS", "clone_graph", "Clone an undirected graph represented as an adjacency dictionary.", "Visit each node once and copy every neighbor list.", "clone_graph({1:[2,4],2:[1,3],3:[2,4],4:[1,3]})", {1:[2,4],2:[1,3],3:[2,4],4:[1,3]}],
+  ["Number of Islands", "Graphs · BFS", "num_islands", "Count connected land regions in a grid.", "Flood-fill every unvisited land cell and increment once per traversal.", "num_islands(['11000','11000','00100','00011'])", 3],
+  ["Pacific Atlantic Water Flow", "Graphs · DFS", "pacific_atlantic", "Return cells that can flow to both oceans.", "Reverse the search: start from each ocean edge and intersect reachable cells.", "pacific_atlantic([[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]])", [[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]]],
+  ["Rotting Oranges", "Graphs · BFS", "oranges_rotting", "Return minutes until all fresh oranges rot, or -1.", "Seed a queue with all rotten oranges and process one minute per BFS layer.", "oranges_rotting([[2,1,1],[1,1,0],[0,1,1]])", 4],
+  ["Network Delay Time", "Graphs · Dijkstra", "network_delay", "Return the time for a signal to reach every node.", "Use a min-heap and finalize nodes in shortest-distance order.", "network_delay([[2,1,1],[2,3,1],[3,4,1]], 4, 2)", 2],
+  ["Cheapest Flights K Stops", "Graphs · Shortest Path", "cheapest_flight", "Find the cheapest route with at most k stops.", "Relax edges k + 1 times, keeping the previous round separate.", "cheapest_flight(3, [[0,1,100],[1,2,100],[0,2,500]], 0, 2, 1)", 200],
+  ["Critical Connections", "Graphs · Tarjan", "critical_connections", "Return all bridges in an undirected network.", "Track discovery and low-link times; a child with low >= discovery is a bridge.", "critical_connections(4, [[0,1],[1,2],[2,0],[1,3]])", [[1,3]]],
+  ["N Queens", "Backtracking", "solve_n_queens", "Return the number of valid ways to place n queens.", "Backtrack by row while tracking used columns and diagonals.", "solve_n_queens(4)", 2],
+  ["Sudoku Validator", "Hash Sets", "is_valid_sudoku", "Validate a 9x9 Sudoku board with dots for blanks.", "Track seen values for each row, column, and 3x3 box.", "is_valid_sudoku([['5','3','.','.','7','.','.','.','.'],['6','.','.','1','9','5','.','.','.'],['.','9','8','.','.','.','.','6','.'],['8','.','.','.','6','.','.','.','3'],['4','.','.','8','.','3','.','.','1'],['7','.','.','.','2','.','.','.','6'],['.','6','.','.','.','.','2','8','.'],['.','.','.','4','1','9','.','.','5'],['.','.','.','.','8','.','.','7','9']])", true],
+  ["Word Search II", "Trie · Backtracking", "find_words", "Find every dictionary word present in a character board.", "Build a trie, then backtrack from every cell while pruning missing prefixes.", "find_words([['o','a','a','n'],['e','t','a','e'],['i','h','k','r'],['i','f','l','v']], ['oath','pea','eat','rain'])", ['eat','oath']],
+  ["Implement Trie", "Trie", "trie_operations", "Process insert, search, and prefix operations on a trie.", "Each node needs children and an end-of-word marker.", "trie_operations([('insert','apple'),('search','apple'),('search','app'),('prefix','app')])", [true,false,true]],
+  ["Add Two Numbers", "Linked Lists", "add_two_numbers", "Add reversed digit lists and return a reversed digit list.", "Advance both lists together, carrying into the next column.", "add_two_numbers([2,4,3], [5,6,4])", [7,0,8]],
+  ["Reverse Nodes in K Group", "Linked Lists", "reverse_k_group", "Reverse every complete group of k values in a list.", "Locate a full group before reversing it, then reconnect its boundaries.", "reverse_k_group([1,2,3,4,5], 2)", [2,1,4,3,5]],
+  ["Copy List with Random Pointer", "Linked Lists · Hash Map", "copy_random_list", "Copy nodes represented as [value, random_index] pairs.", "Map each original index to its copied index before wiring random references.", "copy_random_list([[7,None],[13,0],[11,4],[10,2],[1,0]])", [[7,null],[13,0],[11,4],[10,2],[1,0]]],
+  ["Product Except Self", "Arrays · Prefix Suffix", "product_except_self", "Return products of every number except the number at its own index.", "Build left products, then multiply by a running right product.", "product_except_self([1,2,3,4])", [24,12,8,6]],
+  ["First Missing Positive", "Arrays · Cyclic Sort", "first_missing_positive", "Return the smallest missing positive integer.", "Place each value x at index x - 1 when it belongs in the array.", "first_missing_positive([3,4,-1,1])", 2],
+  ["Search in Rotated Array", "Binary Search", "search_rotated", "Find a target index in a rotated sorted array.", "At least one half is sorted; decide whether the target lies inside it.", "search_rotated([4,5,6,7,0,1,2], 0)", 4],
+  ["Find Minimum Rotated Array", "Binary Search", "find_min_rotated", "Return the minimum from a rotated sorted array with distinct values.", "Compare the midpoint to the right boundary to discard one sorted half.", "find_min_rotated([3,4,5,1,2])", 1],
+  ["Container With Most Water", "Two Pointers", "max_area", "Find the largest container formed by two vertical lines.", "Move only the shorter line because the taller line cannot improve that limiting height.", "max_area([1,8,6,2,5,4,8,3,7])", 49],
+  ["3Sum", "Arrays · Two Pointers", "three_sum", "Return every unique triplet whose sum is zero.", "Sort first, skip duplicates, then solve a two-sum for each anchor.", "three_sum([-1,0,1,2,-1,-4])", [[-1,-1,2],[-1,0,1]]],
+  ["Subarray Sum Equals K", "Prefix Sum · Hash Map", "subarray_sum", "Count subarrays whose values sum to k.", "Store how often each prefix sum has occurred.", "subarray_sum([1,1,1], 2)", 2],
+  ["Maximum Product Subarray", "Dynamic Programming", "max_product", "Return the largest product among all contiguous subarrays.", "A negative number swaps the roles of current minimum and maximum.", "max_product([2,3,-2,4])", 6],
+  ["Jump Game II", "Greedy", "min_jumps", "Return the fewest jumps needed to reach the final index.", "Within each jump range, track the farthest next range.", "min_jumps([2,3,1,1,4])", 2],
+  ["Gas Station", "Greedy", "can_complete_circuit", "Return the start index that completes a circular fuel route, or -1.", "If the running tank drops below zero, no station in that segment can be the start.", "can_complete_circuit([1,2,3,4,5], [3,4,5,1,2])", 3],
+  ["Meeting Rooms II", "Intervals · Heap", "min_meeting_rooms", "Return the minimum number of rooms required for all intervals.", "Sort starts and track active ending times in a min-heap.", "min_meeting_rooms([[0,30],[5,10],[15,20]])", 2],
+  ["Text Justification", "Strings · Simulation", "full_justify", "Format words into exactly sized justified text lines.", "Greedily collect a line, then distribute spaces across its gaps.", "full_justify(['This','is','an','example','of','text','justification.'], 16)", ['This    is    an','example  of text','justification.  ']],
+  ["Basic Calculator", "Stacks · Parsing", "calculate", "Evaluate an expression containing parentheses, addition, and subtraction.", "Store the current result and sign whenever entering parentheses.", "calculate('(1+(4+5+2)-3)+(6+8)')", 23],
+].map(([title, topic, functionName, description, hint, call, expected]) => ({ title, topic, functionName, description, hint, call, expected }));
+
+const challenges = [
+  ...baseChallenges,
+  ...advancedChallengeSpecs.map(({ title, topic }) => ({ title, topic, difficulty: "Advanced", solved: false, xp: 180 })),
 ];
 
 function ProgressRing({ value }: { value: number }) {
@@ -523,6 +583,13 @@ const challengeContent: Record<string, { description: string; starterCode: strin
   "Valid Parentheses": { description: "Check whether every opening bracket has the matching closing bracket in the correct order.", starterCode: "def is_valid(value):\n    # Return True only when every bracket is correctly matched.\n    pass", testCase: "Input: ()[]{}\nExpected output: True", expectedOutput: "True", hint: "A stack lets you match each closing bracket with the most recent opening bracket." },
   "Longest Substring": { description: "Find the length of the longest substring that contains no repeated characters.", starterCode: "def longest_unique_substring(value):\n    # Return the length of the longest substring without repeats.\n    pass", testCase: "Input: abcabcbb\nExpected output: 3", expectedOutput: "3", hint: "Move a sliding-window start pointer past a repeated character instead of rebuilding the substring." },
   "Merge Intervals": { description: "Merge overlapping ranges into the smallest set of non-overlapping intervals.", starterCode: "def merge_intervals(intervals):\n    # Return the merged, non-overlapping intervals.\n    pass", testCase: "Input: [[1, 3], [2, 6], [8, 10]]\nExpected output: [[1, 6], [8, 10]]", expectedOutput: "[[1, 6], [8, 10]]", hint: "Sort ranges by their first value, then compare each new range with the last merged range." },
+  ...Object.fromEntries(advancedChallengeSpecs.map((problem) => [problem.title, {
+    description: problem.description,
+    starterCode: `def ${problem.functionName}(*args):\n    # ${problem.description}\n    pass`,
+    testCase: `Call: ${problem.call}\nExpected output: ${JSON.stringify(problem.expected)}`,
+    expectedOutput: JSON.stringify(problem.expected),
+    hint: problem.hint,
+  }])),
 };
 
 type ChallengeTestCase = { label: string; call: string; expected: unknown };
@@ -551,6 +618,9 @@ const challengeTestCases: Record<string, ChallengeTestCase[]> = {
     { label: "Touching ranges", call: "merge_intervals([[1, 4], [4, 5]])", expected: [[1, 5]] },
     { label: "Same ending", call: "merge_intervals([[1, 4], [0, 4]])", expected: [[0, 4]] },
   ],
+  ...Object.fromEntries(advancedChallengeSpecs.map((problem) => [problem.title, [
+    { label: "Interview example", call: problem.call, expected: problem.expected },
+  ]])),
 };
 
 const TEST_RESULT_MARKER = "__CODEQUEST_TEST_RESULTS__";
@@ -762,6 +832,8 @@ function Dialog({ title, onClose, children }: { title: string; onClose: () => vo
 }
 
 export default function Home({ initialView = "dashboard", initialLearnStage = "languages", initialTopicId = 1 }: { initialView?: View; initialLearnStage?: LearnStage; initialTopicId?: number }) {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const [view, setView] = useState<View>(initialView);
   const [notice, setNotice] = useState("");
   const [xp, setXp] = useState(1560);
@@ -769,6 +841,17 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
   const [panel, setPanel] = useState<Panel>(null);
   const [dailyReminders, setDailyReminders] = useState(true);
   const [celebrations, setCelebrations] = useState(true);
+  useEffect(() => {
+    let active = true;
+    if (window.sessionStorage.getItem("codequest-demo-session")) { setAuthChecked(true); return () => { active = false; }; }
+    if (!hasSupabaseAuth) { router.replace("/login"); return () => { active = false; }; }
+    void createClient().auth.getUser().then(({ data }) => {
+      if (!active) return;
+      if (data.user) setAuthChecked(true);
+      else router.replace("/login");
+    }).catch(() => { if (active) router.replace("/login"); });
+    return () => { active = false; };
+  }, [router]);
   const handleAccountChange = useCallback((nextAccount: CodeQuestAccount | null) => {
     setAccount(nextAccount);
   }, []);
@@ -779,6 +862,7 @@ export default function Home({ initialView = "dashboard", initialLearnStage = "l
   const awardXp = (amount: number, message: string) => { setXp((current) => current + amount); if (celebrations) showNotice(message); };
   const goPractice = () => { setView("practice"); setNotice("Today’s quest is ready. Answer the first question to earn XP."); window.setTimeout(() => setNotice(""), 3600); };
 
+  if (!authChecked) return <main className="app-shell bg-quest-bg" aria-label="Checking account access" />;
   return <main className="app-shell bg-quest-bg">
     <aside className="sidebar">
       <button className="brand" onClick={() => setView("dashboard")} aria-label="CodeQuest home"><span className="brand-mark">⌘</span><span>code<span>quest</span></span></button>

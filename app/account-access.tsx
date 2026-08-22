@@ -3,179 +3,38 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createClient, hasSupabaseAuth } from "@/lib/client";
 
-export type CodeQuestAccount = {
-  displayName: string;
-  email: string;
-  kind: "member" | "demo";
-};
-
-type AccountAccessProps = {
-  account: CodeQuestAccount | null;
-  onAccountChange: (account: CodeQuestAccount | null) => void;
-  onViewProfile: () => void;
-};
+export type CodeQuestAccount = { displayName: string; email: string; kind: "member" | "demo" };
+type AccountAccessProps = { account: CodeQuestAccount | null; onAccountChange: (account: CodeQuestAccount | null) => void; onViewProfile: () => void; initialOpen?: boolean };
+type Mode = "login" | "register";
+type Field = "name" | "email" | "password" | "confirmPassword";
 
 const DEMO_SESSION_KEY = "codequest-demo-session";
-const demoAccount: CodeQuestAccount = {
-  displayName: "Demo Learner",
-  email: "demo@codequest.local",
-  kind: "demo",
-};
+const demoAccount: CodeQuestAccount = { displayName: "Demo Learner", email: "demo@codequest.local", kind: "demo" };
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CQ";
+const messageFrom = (error: unknown) => error instanceof Error && error.message ? error.message : "Something went wrong. Please try again.";
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "CQ";
-}
-
-function messageFrom(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return "Email confirmation took too long. Check your SMTP settings, then try again.";
-  }
-  if (message.toLowerCase().includes("abort") || message.toLowerCase().includes("failed to fetch")) {
-    return "Email confirmation could not be sent. Check your SMTP settings, then try again.";
-  }
-  if (message === "{}") {
-    return "Email confirmation could not be sent. Verify your Resend sender domain and SMTP details, then try again.";
-  }
-  return message || "Something went wrong. Please try again.";
-}
-
-export function AccountAccess({ account, onAccountChange, onViewProfile }: AccountAccessProps) {
-  const [open, setOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
+export function AccountAccess({ account, onAccountChange, onViewProfile, initialOpen = false }: AccountAccessProps) {
+  const [open, setOpen] = useState(initialOpen); const [profileOpen, setProfileOpen] = useState(false); const [mode, setMode] = useState<Mode>("login");
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); const [errors, setErrors] = useState<Partial<Record<Field, string>>>({}); const [message, setMessage] = useState(""); const [isSubmitting, setIsSubmitting] = useState(false); const [tilt, setTilt] = useState({ x: 0, y: 0 });
   useEffect(() => {
-    const storedDemo = window.sessionStorage.getItem(DEMO_SESSION_KEY);
-    if (storedDemo) onAccountChange(demoAccount);
+    if (window.sessionStorage.getItem(DEMO_SESSION_KEY)) onAccountChange(demoAccount);
     if (!hasSupabaseAuth) return;
-
-    const supabase = createClient();
-    let active = true;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!active || !data.user) return;
-      window.sessionStorage.removeItem(DEMO_SESSION_KEY);
-      onAccountChange({
-        displayName: data.user.user_metadata.full_name || data.user.email || "CodeQuest learner",
-        email: data.user.email || "",
-        kind: "member",
-      });
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active || !session?.user) return;
-      window.sessionStorage.removeItem(DEMO_SESSION_KEY);
-      onAccountChange({
-        displayName: session.user.user_metadata.full_name || session.user.email || "CodeQuest learner",
-        email: session.user.email || "",
-        kind: "member",
-      });
-    });
-
-    return () => {
-      active = false;
-      listener.subscription.unsubscribe();
-    };
+    const supabase = createClient(); let active = true;
+    void supabase.auth.getUser().then(({ data }) => { if (active && data.user) { window.sessionStorage.removeItem(DEMO_SESSION_KEY); onAccountChange({ displayName: data.user.user_metadata.full_name || data.user.email || "CodeQuest learner", email: data.user.email || "", kind: "member" }); } });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { if (active && session?.user) { window.sessionStorage.removeItem(DEMO_SESSION_KEY); onAccountChange({ displayName: session.user.user_metadata.full_name || session.user.email || "CodeQuest learner", email: session.user.email || "", kind: "member" }); } });
+    return () => { active = false; listener.subscription.unsubscribe(); };
   }, [onAccountChange]);
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [open]);
-
-  const openAccess = (nextMode: "login" | "register") => {
-    setMode(nextMode);
-    setMessage("");
-    setOpen(true);
-  };
-
-  const useDemoAccess = () => {
-    window.sessionStorage.setItem(DEMO_SESSION_KEY, "true");
-    onAccountChange(demoAccount);
-    setMessage("");
-    setOpen(false);
-  };
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setMessage("");
-    if (!hasSupabaseAuth) {
-      setMessage("Email access is not configured yet. You can still use Demo access.");
-      return;
-    }
-    if (mode === "register" && !name.trim()) {
-      setMessage("Please enter your name.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const supabase = createClient();
-      if (mode === "register") {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: name.trim() },
-            emailRedirectTo: `${window.location.origin}/`,
-          },
-        });
-        if (error) throw error;
-        if (!data.session) {
-          setMessage("Registration complete. Check your email to confirm your account, then sign in.");
-          return;
-        }
-        onAccountChange({ displayName: name.trim(), email, kind: "member" });
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        const user = data.user;
-        onAccountChange({
-          displayName: user.user_metadata.full_name || user.email || "CodeQuest learner",
-          email: user.email || email,
-          kind: "member",
-        });
-      }
-      setPassword("");
-      setOpen(false);
-    } catch (error) {
-      setMessage(messageFrom(error));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const signOut = async () => {
-    setProfileOpen(false);
-    if (account?.kind === "demo") {
-      window.sessionStorage.removeItem(DEMO_SESSION_KEY);
-      onAccountChange(null);
-      return;
-    }
-    try {
-      if (hasSupabaseAuth) await createClient().auth.signOut();
-    } finally {
-      onAccountChange(null);
-    }
-  };
-
-  if (account) {
-    return <div className="profile-wrap"><button type="button" className="profile-button" onClick={() => setProfileOpen((current) => !current)} aria-expanded={profileOpen}><span className="avatar avatar--gold">{initials(account.displayName)}</span><span className="profile-name">{account.displayName}</span><i>⌄</i></button>{profileOpen && <div className="profile-menu"><b>{account.displayName}</b><span>{account.kind === "demo" ? "Demo access · progress resets on sign out" : account.email}</span><button type="button" onClick={() => { onViewProfile(); setProfileOpen(false); }}>View profile</button><button type="button" className="profile-menu__signout" onClick={() => void signOut()}>Sign out</button></div>}</div>;
-  }
-
-  return <><button type="button" className="auth-launch" onClick={() => openAccess("login")}>Log in</button><div className="auth-register-wrap"><button type="button" className="auth-register" onClick={() => openAccess("register")}>Register</button></div>{open && <div className="dialog-backdrop" role="presentation" onMouseDown={() => setOpen(false)}><section className="dialog-card auth-dialog" role="dialog" aria-modal="true" aria-label="Account access" onMouseDown={(event) => event.stopPropagation()}><div className="dialog-head"><div><span className="eyebrow">CODEQUEST ACCOUNT</span><h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2></div><button type="button" className="dialog-close" onClick={() => setOpen(false)} aria-label="Close account access">×</button></div><p className="dialog-copy">{mode === "login" ? "Sign in with your email and password to keep learning across devices." : "Create an account to save your learning journey."}</p><div className="auth-tabs" role="tablist" aria-label="Account access options"><button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "auth-tab--active" : ""} onClick={() => { setMode("login"); setMessage(""); }}>Log in</button><button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "auth-tab--active" : ""} onClick={() => { setMode("register"); setMessage(""); }}>Register</button></div><form className="auth-form" onSubmit={(event) => void submit(event)}>{mode === "register" && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" /></label>}<label>Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label><label>Password<input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /></label>{message && <p className="auth-message" role="status">{message}</p>}<button className="button button--primary auth-submit" type="submit" disabled={isSubmitting}>{isSubmitting ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}</button></form><div className="auth-divider"><span>or</span></div><button type="button" className="auth-demo" onClick={useDemoAccess}><span>✦</span><div><b>Try Demo access</b><small>Explore CodeQuest instantly — no account needed.</small></div><i>→</i></button></section></div>}</>;
+  useEffect(() => { if (!open) return; const close = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; window.addEventListener("keydown", close); return () => window.removeEventListener("keydown", close); }, [open]);
+  const switchMode = (next: Mode) => { setMode(next); setErrors({}); setMessage(""); setConfirmPassword(""); };
+  const update = (field: Field, value: string) => { ({ name: setName, email: setEmail, password: setPassword, confirmPassword: setConfirmPassword }[field])(value); setErrors((current) => ({ ...current, [field]: undefined })); setMessage(""); };
+  const validate = () => { const next: Partial<Record<Field, string>> = {}; if (mode === "register" && name.trim().length < 2) next.name = "Enter your full name."; if (!emailPattern.test(email)) next.email = "Enter a valid email address."; if (password.length < 8) next.password = "Use at least 8 characters."; if (mode === "register" && password !== confirmPassword) next.confirmPassword = "Passwords do not match."; setErrors(next); return Object.keys(next).length === 0; };
+  const useDemo = () => { window.sessionStorage.setItem(DEMO_SESSION_KEY, "true"); onAccountChange(demoAccount); setOpen(false); };
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setMessage(""); if (!validate()) return; if (!hasSupabaseAuth) { setMessage("Secure email access is not configured yet. You can still enter with Demo access."); return; } setIsSubmitting(true); try { const supabase = createClient(); if (mode === "register") { const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() }, emailRedirectTo: `${window.location.origin}/` } }); if (error) throw error; if (!data.session) { setMessage("Account created. Check your inbox to confirm your email, then sign in."); return; } onAccountChange({ displayName: name.trim(), email, kind: "member" }); } else { const { data, error } = await supabase.auth.signInWithPassword({ email, password }); if (error) throw error; onAccountChange({ displayName: data.user.user_metadata.full_name || data.user.email || "CodeQuest learner", email: data.user.email || email, kind: "member" }); } setPassword(""); setConfirmPassword(""); setOpen(false); } catch (error) { setMessage(messageFrom(error)); } finally { setIsSubmitting(false); } };
+  const signOut = async () => { setProfileOpen(false); if (account?.kind === "demo") window.sessionStorage.removeItem(DEMO_SESSION_KEY); else if (hasSupabaseAuth) await createClient().auth.signOut(); onAccountChange(null); };
+  const openLoginPage = () => { window.location.assign("/login"); };
+  if (!account) return <><button type="button" className="auth-launch" onClick={openLoginPage}>Log in</button><div className="auth-register-wrap"><button type="button" className="auth-register" onClick={openLoginPage}>Register</button></div></>;
+  if (account) return <div className="profile-wrap"><button type="button" className="profile-button" onClick={() => setProfileOpen((current) => !current)} aria-expanded={profileOpen}><span className="avatar avatar--gold">{initials(account.displayName)}</span><span className="profile-name">{account.displayName}</span><i>⌄</i></button>{profileOpen && <div className="profile-menu"><b>{account.displayName}</b><span>{account.kind === "demo" ? "Demo access · progress resets on sign out" : account.email}</span><button type="button" onClick={() => { onViewProfile(); setProfileOpen(false); }}>View profile</button><button type="button" className="profile-menu__signout" onClick={() => void signOut()}>Sign out</button></div>}</div>;
+  return <><button type="button" className="auth-launch" onClick={() => { switchMode("login"); setOpen(true); }}>Log in</button><div className="auth-register-wrap"><button type="button" className="auth-register" onClick={() => { switchMode("register"); setOpen(true); }}>Register</button></div>{open && <div className="portal-backdrop" role="presentation" onMouseDown={() => setOpen(false)} onPointerMove={(event) => setTilt({ x: (event.clientY / window.innerHeight - .5) * -6, y: (event.clientX / window.innerWidth - .5) * 8 })} onPointerLeave={() => setTilt({ x: 0, y: 0 })}><div className="portal-scene" aria-hidden="true"><i /><i /><i /><b /><b /><b /></div><section className={`portal-auth ${mode === "register" ? "portal-auth--register" : ""}`} style={{ "--tilt-x": `${tilt.x}deg`, "--tilt-y": `${tilt.y}deg` } as React.CSSProperties} role="dialog" aria-modal="true" aria-label="Account access" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="portal-close" onClick={() => setOpen(false)} aria-label="Close account access">×</button><div className="portal-brand"><span>✦</span><b>CODEQUEST</b><em>SECURE GATEWAY</em></div><div className="portal-copy"><small>{mode === "login" ? "WELCOME BACK, EXPLORER" : "BEGIN YOUR JOURNEY"}</small><h2>{mode === "login" ? "Enter the future." : "Create your portal."}</h2><p>{mode === "login" ? "Your next coding milestone is waiting." : "Build skills, track progress, and level up."}</p></div><div className="portal-tabs" role="tablist" aria-label="Account access"><button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "is-active" : ""} onClick={() => switchMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => switchMode("register")}>Create account</button></div><form className="portal-form" onSubmit={(event) => void submit(event)} noValidate>{mode === "register" && <label className={errors.name ? "has-error" : ""}><span>FULL NAME</span><input autoComplete="name" value={name} onChange={(event) => update("name", event.target.value)} placeholder="Alex Morgan" />{errors.name && <small>{errors.name}</small>}</label>}<label className={errors.email ? "has-error" : ""}><span>EMAIL ADDRESS</span><input type="email" autoComplete="email" value={email} onChange={(event) => update("email", event.target.value)} placeholder="you@example.com" />{errors.email && <small>{errors.email}</small>}</label><label className={errors.password ? "has-error" : ""}><span>PASSWORD</span><span className="portal-password"><input type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => update("password", event.target.value)} placeholder="At least 8 characters" /><button type="button" onClick={() => setShowPassword((current) => !current)}>{showPassword ? "Hide" : "Show"}</button></span>{errors.password && <small>{errors.password}</small>}</label>{mode === "register" && <label className={errors.confirmPassword ? "has-error" : ""}><span>CONFIRM PASSWORD</span><input type={showPassword ? "text" : "password"} autoComplete="new-password" value={confirmPassword} onChange={(event) => update("confirmPassword", event.target.value)} placeholder="Repeat your password" />{errors.confirmPassword && <small>{errors.confirmPassword}</small>}</label>}{mode === "login" && <div className="portal-options"><label><input type="checkbox" /> Remember me</label><button type="button" onClick={() => setMessage("Password reset can be connected through Supabase Auth when email access is configured.")}>Forgot password?</button></div>}{message && <p className="portal-message" role="status">{message}</p>}<button className="portal-submit" type="submit" disabled={isSubmitting}><span>{isSubmitting ? "Opening gateway…" : mode === "login" ? "Enter CodeQuest" : "Create account"}</span><i>→</i></button></form><div className="portal-divider"><span>OR</span></div><button type="button" className="portal-demo" onClick={useDemo}><span>✦</span><span><b>Explore demo mode</b><small>No account required</small></span><i>→</i></button><p className="portal-switch">{mode === "login" ? "New to CodeQuest?" : "Already a member?"} <button type="button" onClick={() => switchMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create an account" : "Sign in"}</button></p></section></div>}</>;
 }
